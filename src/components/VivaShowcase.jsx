@@ -12,9 +12,10 @@ import {
   TrendingUp, 
   Mic, 
   ShieldCheck, 
-  Layers,
-  Zap,
-  Play
+  Layers, 
+  Zap, 
+  Play,
+  UtensilsCrossed
 } from 'lucide-react';
 
 export default function VivaShowcase() {
