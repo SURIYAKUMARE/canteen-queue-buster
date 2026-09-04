@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
-import { initialCampusMenu } from '../../server/data/campusMenu.js';
-import { initialSeedOrders } from '../../server/data/seedOrders.js';
+import { databaseService } from '../lib/databaseService.js';
+import { subscribeToOrders, subscribeToFoodItems } from '../lib/realtimeService.js';
 import { generateOrderQRCode } from '../utils/qrGenerator.js';
 import { playReadyChime, playSuccessChime } from '../utils/audioAlert.js';
+import { isSupabaseConfigured } from '../lib/supabaseClient.js';
 
 const CampusContext = createContext(null);
 
 export function CampusProvider({ children }) {
-  // Global Role Mode: 'student' | 'vendor' | 'split' (side-by-side demo)
+  // Global Role Mode: 'student' | 'vendor' | 'split' (side-by-side presentation)
   const [activeRole, setActiveRole] = useState('student');
 
   // Canteen Operating Status
@@ -21,7 +22,23 @@ export function CampusProvider({ children }) {
   const [vendorTab, setVendorTab] = useState('dashboard');
   const [vendorOrderFilter, setVendorOrderFilter] = useState('ALL');
 
-  // Profiles
+  // Auth & Profile state
+  const [currentUser, setCurrentUser] = useState({
+    profile: {
+      id: '00000000-0000-0000-0000-000000000002',
+      full_name: 'Rahul Sharma',
+      email: 'rahul.sharma@college.edu',
+      phone: '+91 98765 43210',
+      role: 'student'
+    },
+    student: {
+      id: '22222222-2222-2222-2222-222222222222',
+      student_id: '21BCS042',
+      college_email: 'rahul.sharma@college.edu',
+      phone: '+91 98765 43210'
+    }
+  });
+
   const [studentUser, setStudentUser] = useState({
     id: 'STU-2024-8842',
     name: 'Rahul Sharma',
@@ -35,7 +52,7 @@ export function CampusProvider({ children }) {
   });
 
   const [vendorUser, setVendorUser] = useState({
-    id: 'VND-01',
+    id: '11111111-1111-1111-1111-111111111111',
     name: 'Campus Central Kitchen',
     counterBay: 'Bay 1 (Express) & Bay 2 (Hot Meals)',
     email: 'canteen@college.edu',
@@ -44,7 +61,8 @@ export function CampusProvider({ children }) {
   });
 
   // Food Menu
-  const [menu, setMenu] = useState(initialCampusMenu);
+  const [menu, setMenu] = useState([]);
+  const [menuLoading, setMenuLoading] = useState(true);
   const [selectedFoodDetail, setSelectedFoodDetail] = useState(null);
 
   // Cart
@@ -53,13 +71,21 @@ export function CampusProvider({ children }) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
   // Orders
-  const [orders, setOrders] = useState(initialSeedOrders);
-  const [activeStudentOrder, setActiveStudentOrder] = useState(initialSeedOrders[1]); // CB-8492
-  const [orderCounter, setOrderCounter] = useState(8494);
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [activeStudentOrder, setActiveStudentOrder] = useState(null);
 
-  // Live Modals & Popups
+  // Payment Checkout
+  const [pendingCheckoutOrder, setPendingCheckoutOrder] = useState(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  // Modals & UI Controls
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalInitialRole, setAuthModalInitialRole] = useState('student');
+  const [supabaseConfigModalOpen, setSupabaseConfigModalOpen] = useState(false);
   const [liveVendorOrderPopup, setLiveVendorOrderPopup] = useState(null);
   const [orderSuccessModal, setOrderSuccessModal] = useState(null);
+
   const [notifications, setNotifications] = useState([
     {
       id: 'notif-1',
@@ -69,19 +95,102 @@ export function CampusProvider({ children }) {
       time: '11:54 AM',
       type: 'ready',
       orderId: 'CB-8491'
-    },
-    {
-      id: 'notif-2',
-      targetRole: 'vendor',
-      title: 'New Order Received',
-      message: 'Priya Nair placed order #CB-8493 (₹70)',
-      time: '12:02 PM',
-      type: 'new_order',
-      orderId: 'CB-8493'
     }
   ]);
 
-  // Push notification helper
+  // Load Menu and Orders from Database
+  const fetchMenu = useCallback(async () => {
+    try {
+      setMenuLoading(true);
+      const items = await databaseService.getFoodItems();
+      setMenu(items || []);
+    } catch (err) {
+      console.error('Failed to fetch food items:', err);
+    } finally {
+      setMenuLoading(false);
+    }
+  }, []);
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      setOrdersLoading(true);
+      const list = await databaseService.getOrders();
+      setOrders(list || []);
+      // Set active student order if not set
+      if (list && list.length > 0) {
+        const studentOrders = list.filter(o => o.order_status !== 'COMPLETED' && o.order_status !== 'CANCELLED');
+        if (studentOrders.length > 0) {
+          setActiveStudentOrder(studentOrders[0]);
+        } else {
+          setActiveStudentOrder(list[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch orders:', err);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMenu();
+    fetchOrders();
+  }, [fetchMenu, fetchOrders]);
+
+  // Setup Realtime Subscriptions
+  useEffect(() => {
+    const unsubOrders = subscribeToOrders({
+      onNewOrder: (newOrder) => {
+        // Vendor live alert popup
+        setLiveVendorOrderPopup(newOrder);
+        playSuccessChime();
+
+        // Add vendor notification
+        addNotification({
+          targetRole: 'vendor',
+          title: '🔔 NEW ORDER RECEIVED',
+          message: `Order #${newOrder.order_number} received for ₹${newOrder.total_amount}.`,
+          type: 'new_order',
+          orderId: newOrder.order_number
+        });
+
+        // Update orders list
+        setOrders(prev => {
+          const exists = prev.some(o => o.id === newOrder.id);
+          if (exists) {
+            return prev.map(o => o.id === newOrder.id ? { ...o, ...newOrder } : o);
+          }
+          return [newOrder, ...prev];
+        });
+      },
+      onOrderUpdate: (updatedOrder) => {
+        setOrders(prev => prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
+
+        // Update active student order
+        setActiveStudentOrder(curr => {
+          if (curr?.id === updatedOrder.id) {
+            if (updatedOrder.order_status === 'READY') {
+              playReadyChime();
+              confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
+            }
+            return { ...curr, ...updatedOrder };
+          }
+          return curr;
+        });
+      }
+    });
+
+    const unsubMenu = subscribeToFoodItems(() => {
+      fetchMenu();
+    });
+
+    return () => {
+      unsubOrders();
+      unsubMenu();
+    };
+  }, [fetchMenu]);
+
+  // Notifications helper
   const addNotification = useCallback(({ targetRole, title, message, type = 'info', orderId = null }) => {
     const newNotif = {
       id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -95,7 +204,7 @@ export function CampusProvider({ children }) {
     setNotifications(prev => [newNotif, ...prev]);
   }, []);
 
-  // Cart Helpers
+  // Cart Operations
   const addToCart = (food, quantity = 1, notes = '') => {
     setCart(prev => {
       const existing = prev[food.id];
@@ -150,268 +259,200 @@ export function CampusProvider({ children }) {
 
   const cartItemsArray = Object.values(cart);
   const cartCount = cartItemsArray.reduce((acc, it) => acc + it.quantity, 0);
-  const cartTotal = cartItemsArray.reduce((acc, it) => acc + (it.food.price * it.quantity), 0);
+  const cartTotal = cartItemsArray.reduce((acc, it) => acc + ((Number(it.food.price) || 0) * it.quantity), 0);
 
-  // Place Order Flow
-  const placeOrder = async ({ paymentMethod = 'Campus RFID Card', notes = '' }) => {
-    if (!cartItemsArray.length) return null;
-
-    const orderId = `CB-${orderCounter}`;
-    setOrderCounter(c => c + 1);
-
-    const foodItems = cartItemsArray.map(item => ({
-      id: item.food.id,
-      name: item.food.name,
-      price: item.food.price,
-      quantity: item.quantity,
-      isVeg: item.food.isVeg,
-      notes: item.notes
-    }));
-
-    const maxPrepTime = Math.max(...cartItemsArray.map(it => it.food.prepTimeMinutes || 5));
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const qrPayload = {
-      orderId,
-      studentId: studentUser.rollNo,
-      studentName: studentUser.name,
-      totalAmount: cartTotal,
-      itemsCount: cartCount,
-      issuedAt: new Date().toISOString(),
-      verificationToken: `VFY-${orderId.replace('CB-', '')}-7K`
-    };
-
-    const qrCodeImage = await generateOrderQRCode(qrPayload);
-
-    const newOrder = {
-      orderId,
-      studentId: studentUser.rollNo,
-      studentName: studentUser.name,
-      studentDept: `${studentUser.dept} • ${studentUser.year}`,
-      studentPhone: studentUser.phone,
-      foodItems,
-      quantities: cartCount,
-      totalAmount: cartTotal,
-      paymentMethod,
-      paymentStatus: 'PAID',
-      orderStatus: 'PENDING',
-      createdAt: nowTime,
-      estimatedPrepMins: maxPrepTime,
-      counterBay: cartCount > 2 ? 'Bay 2 (Hot Meals)' : 'Bay 1 (Express)',
-      notes,
-      qrCodeData: JSON.stringify(qrPayload),
-      qrCodeImage
-    };
-
-    // If paid with wallet, deduct student balance
-    if (paymentMethod.includes('RFID') || paymentMethod.includes('Wallet')) {
-      setStudentUser(prev => ({
-        ...prev,
-        walletBalance: Math.max(0, prev.walletBalance - cartTotal)
-      }));
+  // Initiate Checkout Flow: Creates PENDING_PAYMENT order and opens Payment Modal
+  const initiateCheckout = async ({ notes = '' } = {}) => {
+    if (!cartItemsArray.length) {
+      alert('Your cart is empty. Add food items before checkout.');
+      return;
     }
 
-    setOrders(prev => [newOrder, ...prev]);
-    setActiveStudentOrder(newOrder);
-    clearCart();
-    setIsCartOpen(false);
-    setIsCheckoutOpen(false);
+    try {
+      const orderItems = cartItemsArray.map(item => ({
+        id: item.food.id,
+        name: item.food.name,
+        price: item.food.price,
+        quantity: item.quantity,
+        notes: item.notes
+      }));
 
-    // Show order success screen for student
-    setOrderSuccessModal(newOrder);
+      // Create Order in Supabase with PENDING status
+      const createdOrder = await databaseService.createPendingOrder({
+        studentId: currentUser?.student?.id || studentUser.id,
+        vendorId: vendorUser.id,
+        items: orderItems,
+        subtotal: cartTotal,
+        totalAmount: cartTotal,
+        notes
+      });
 
-    // Add student notification
-    addNotification({
-      targetRole: 'student',
-      title: 'Order Confirmed 🎉',
-      message: `Your order #${orderId} was confirmed. Estimated prep: ~${maxPrepTime} mins.`,
-      type: 'confirmed',
-      orderId
-    });
-
-    // Alert vendor with live order popup and chime
-    playSuccessChime();
-    setLiveVendorOrderPopup(newOrder);
-    addNotification({
-      targetRole: 'vendor',
-      title: '🔔 New Order Received',
-      message: `${studentUser.name} placed #${orderId} for ₹${cartTotal}`,
-      type: 'new_order',
-      orderId
-    });
-
-    // Confetti celebration
-    confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
-
-    return newOrder;
+      setPendingCheckoutOrder(createdOrder);
+      setIsCheckoutOpen(false);
+      setIsCartOpen(false);
+      setIsPaymentModalOpen(true);
+      return createdOrder;
+    } catch (err) {
+      console.error('Failed to initiate checkout:', err);
+      alert('Checkout error: ' + (err.message || 'Unable to place pending order.'));
+    }
   };
 
-  // Vendor Action: Accept Order (PENDING -> PREPARING)
-  const acceptOrder = (orderId) => {
-    setOrders(prev => prev.map(o => {
-      if (o.orderId === orderId) {
-        return { ...o, orderStatus: 'PREPARING', acceptedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-      }
-      return o;
-    }));
+  // Called after payment authorization completes
+  const handlePaymentCompleted = (confirmedOrder) => {
+    clearCart();
+    setIsPaymentModalOpen(false);
+    setPendingCheckoutOrder(null);
+    setActiveStudentOrder(confirmedOrder);
+    setOrderSuccessModal(confirmedOrder);
+    fetchOrders();
+  };
 
-    setLiveVendorOrderPopup(null);
+  // Vendor Action: Accept Order (PAID -> ACCEPTED)
+  const acceptOrder = async (orderId) => {
+    try {
+      const updated = await databaseService.updateOrderStatus(orderId, 'ACCEPTED');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updated } : o));
+      setLiveVendorOrderPopup(null);
 
-    // Update active student order if matching
-    setActiveStudentOrder(curr => curr?.orderId === orderId ? { ...curr, orderStatus: 'PREPARING' } : curr);
+      addNotification({
+        targetRole: 'student',
+        title: 'Order Accepted 👨‍🍳',
+        message: `Kitchen accepted order #${updated.order_number || orderId}. Starting preparation shortly.`,
+        type: 'accepted',
+        orderId: updated.order_number
+      });
+    } catch (err) {
+      alert('Failed to accept order: ' + err.message);
+    }
+  };
 
-    addNotification({
-      targetRole: 'student',
-      title: 'Food is being prepared 👨‍🍳',
-      message: `Kitchen accepted #${orderId}. Preparing your fresh meal!`,
-      type: 'preparing',
-      orderId
-    });
+  // Vendor Action: Start Prep (ACCEPTED -> PREPARING)
+  const startPrepOrder = async (orderId) => {
+    try {
+      const updated = await databaseService.updateOrderStatus(orderId, 'PREPARING');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updated } : o));
+
+      addNotification({
+        targetRole: 'student',
+        title: 'Food is Being Prepared 🍳',
+        message: `Your meal #${updated.order_number || orderId} is sizzling on the stove!`,
+        type: 'preparing',
+        orderId: updated.order_number
+      });
+    } catch (err) {
+      alert('Failed to update status: ' + err.message);
+    }
   };
 
   // Vendor Action: Reject Order
-  const rejectOrder = (orderId, reason = 'Item out of stock') => {
-    setOrders(prev => prev.map(o => {
-      if (o.orderId === orderId) {
-        return { ...o, orderStatus: 'CANCELLED', rejectionReason: reason };
-      }
-      return o;
-    }));
+  const rejectOrder = async (orderId, reason = 'Item sold out') => {
+    try {
+      const updated = await databaseService.updateOrderStatus(orderId, 'CANCELLED');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updated } : o));
+      setLiveVendorOrderPopup(null);
 
-    setLiveVendorOrderPopup(null);
-
-    addNotification({
-      targetRole: 'student',
-      title: 'Order Cancelled',
-      message: `Order #${orderId} could not be fulfilled: ${reason}. Refund processed.`,
-      type: 'cancelled',
-      orderId
-    });
+      addNotification({
+        targetRole: 'student',
+        title: 'Order Cancelled',
+        message: `Order #${updated.order_number || orderId} could not be fulfilled: ${reason}. Refund initiated.`,
+        type: 'cancelled',
+        orderId: updated.order_number
+      });
+    } catch (err) {
+      alert('Failed to reject order: ' + err.message);
+    }
   };
 
   // Vendor Action: Mark Order Ready (PREPARING -> READY)
-  const markOrderReady = (orderId) => {
-    const readyTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setOrders(prev => prev.map(o => {
-      if (o.orderId === orderId) {
-        return { ...o, orderStatus: 'READY', readyAt: readyTime };
-      }
-      return o;
-    }));
-
-    setActiveStudentOrder(curr => {
-      if (curr?.orderId === orderId) {
-        playReadyChime();
-        confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
-        return { ...curr, orderStatus: 'READY', readyAt: readyTime };
-      }
-      return curr;
-    });
-
-    addNotification({
-      targetRole: 'student',
-      title: 'Food is Ready for Pickup! 🔔',
-      message: `Order #${orderId} is packed and ready at the pickup bay. Please show your QR code!`,
-      type: 'ready',
-      orderId
-    });
-  };
-
-  // Vendor Action: Verify QR & Confirm Pickup (READY -> COMPLETED)
-  const verifyQRCode = (scannedDataOrId) => {
-    if (!scannedDataOrId) return null;
-    let targetId = scannedDataOrId.trim();
-
-    // Try parsing JSON if full QR payload passed
+  const markOrderReady = async (orderId) => {
     try {
-      if (targetId.startsWith('{')) {
-        const parsed = JSON.parse(targetId);
-        targetId = parsed.orderId;
-      }
-    } catch (e) {}
+      const updated = await databaseService.updateOrderStatus(orderId, 'READY');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updated } : o));
 
-    const order = orders.find(o => o.orderId.toUpperCase() === targetId.toUpperCase());
-    return order || null;
+      playReadyChime();
+      confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
+
+      addNotification({
+        targetRole: 'student',
+        title: 'Food is Ready for Pickup! 🔔',
+        message: `Order #${updated.order_number || orderId} is packed. Head to counter bay and show your QR code!`,
+        type: 'ready',
+        orderId: updated.order_number
+      });
+    } catch (err) {
+      alert('Failed to mark ready: ' + err.message);
+    }
   };
 
-  const confirmPickup = (orderId) => {
-    const collectedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setOrders(prev => prev.map(o => {
-      if (o.orderId === orderId) {
-        return { ...o, orderStatus: 'COMPLETED', collectedAt: collectedTime };
-      }
-      return o;
-    }));
-
-    setActiveStudentOrder(curr => {
-      if (curr?.orderId === orderId) {
-        playSuccessChime();
-        return { ...curr, orderStatus: 'COMPLETED', collectedAt: collectedTime };
-      }
-      return curr;
-    });
-
-    addNotification({
-      targetRole: 'student',
-      title: 'Food Collected Successfully ✓',
-      message: `Enjoy your meal! Order #${orderId} verified and handed over.`,
-      type: 'completed',
-      orderId
-    });
-
-    addNotification({
-      targetRole: 'vendor',
-      title: 'Pickup Confirmed ✓',
-      message: `Order #${orderId} marked as completed.`,
-      type: 'completed',
-      orderId
-    });
+  // Vendor Action: Menu Management
+  const addFoodItem = async (foodData) => {
+    try {
+      const created = await databaseService.addFoodItem(foodData, vendorUser.id);
+      setMenu(prev => [created, ...prev]);
+      return created;
+    } catch (err) {
+      alert('Failed to add food item: ' + err.message);
+    }
   };
 
-  // Menu Management
-  const addFoodItem = (foodData) => {
-    const newFood = {
-      id: `food-${Date.now()}`,
-      rating: 4.8,
-      available: true,
-      tags: ['New Item'],
-      ...foodData
-    };
-    setMenu(prev => [newFood, ...prev]);
+  const updateFoodItem = async (id, updatedFields) => {
+    try {
+      const updated = await databaseService.updateFoodItem(id, updatedFields);
+      setMenu(prev => prev.map(m => m.id === id ? { ...m, ...updated } : m));
+      return updated;
+    } catch (err) {
+      alert('Failed to update food item: ' + err.message);
+    }
   };
 
-  const updateFoodItem = (id, updatedFields) => {
-    setMenu(prev => prev.map(item => item.id === id ? { ...item, ...updatedFields } : item));
+  const deleteFoodItem = async (id) => {
+    try {
+      await databaseService.deleteFoodItem(id);
+      setMenu(prev => prev.filter(m => m.id !== id));
+    } catch (err) {
+      alert('Failed to delete food item: ' + err.message);
+    }
   };
 
-  const deleteFoodItem = (id) => {
-    setMenu(prev => prev.filter(item => item.id !== id));
+  const toggleFoodAvailability = async (id) => {
+    const item = menu.find(m => m.id === id);
+    if (!item) return;
+    const newStatus = !item.is_available;
+    try {
+      const updated = await databaseService.updateFoodItem(id, { is_available: newStatus });
+      setMenu(prev => prev.map(m => m.id === id ? { ...m, is_available: newStatus } : m));
+    } catch (err) {
+      alert('Failed to toggle availability: ' + err.message);
+    }
   };
 
-  const toggleFoodAvailability = (id) => {
-    setMenu(prev => prev.map(item => item.id === id ? { ...item, available: !item.available } : item));
-  };
-
-  // Canteen Open/Close toggle
   const toggleCanteenStatus = () => {
     setIsCanteenOpen(prev => !prev);
   };
 
-  // Reset Demo State
-  const resetAllData = () => {
-    setMenu(initialCampusMenu);
-    setOrders(initialSeedOrders);
-    setActiveStudentOrder(initialSeedOrders[1]);
-    setCart({});
-    setIsCanteenOpen(true);
-    setStudentUser(prev => ({ ...prev, walletBalance: 450 }));
-    setLiveVendorOrderPopup(null);
-    setOrderSuccessModal(null);
+  // Role switching with authorization checks
+  const handleRoleSwitch = (newRole) => {
+    if (newRole === 'student' || newRole === 'vendor' || newRole === 'split') {
+      setActiveRole(newRole);
+    }
+  };
+
+  const openAuthModal = (roleToAuth = 'student') => {
+    setAuthModalInitialRole(roleToAuth);
+    setAuthModalOpen(true);
+  };
+
+  const handleLogout = async () => {
+    await databaseService.signOut();
+    setCurrentUser(null);
+    setAuthModalOpen(true);
   };
 
   const value = {
+    // Role & Navigation
     activeRole,
-    setActiveRole,
+    setActiveRole: handleRoleSwitch,
     isCanteenOpen,
     toggleCanteenStatus,
     studentTab,
@@ -420,13 +461,36 @@ export function CampusProvider({ children }) {
     setVendorTab,
     vendorOrderFilter,
     setVendorOrderFilter,
+
+    // Auth & Profiles
+    currentUser,
+    setCurrentUser,
     studentUser,
     setStudentUser,
     vendorUser,
     setVendorUser,
+    openAuthModal,
+    handleLogout,
+    authModalOpen,
+    setAuthModalOpen,
+    authModalInitialRole,
+
+    // Supabase config
+    supabaseConfigModalOpen,
+    setSupabaseConfigModalOpen,
+
+    // Menu
     menu,
+    menuLoading,
+    fetchMenu,
     selectedFoodDetail,
     setSelectedFoodDetail,
+    addFoodItem,
+    updateFoodItem,
+    deleteFoodItem,
+    toggleFoodAvailability,
+
+    // Cart
     cart,
     cartItemsArray,
     cartCount,
@@ -439,26 +503,34 @@ export function CampusProvider({ children }) {
     updateCartQty,
     removeFromCart,
     clearCart,
+
+    // Checkout & Payment
+    initiateCheckout,
+    pendingCheckoutOrder,
+    isPaymentModalOpen,
+    setIsPaymentModalOpen,
+    handlePaymentCompleted,
+
+    // Orders
     orders,
+    ordersLoading,
+    refreshOrders: fetchOrders,
     activeStudentOrder,
     setActiveStudentOrder,
-    placeOrder,
     acceptOrder,
+    startPrepOrder,
     rejectOrder,
     markOrderReady,
-    verifyQRCode,
-    confirmPickup,
-    addFoodItem,
-    updateFoodItem,
-    deleteFoodItem,
-    toggleFoodAvailability,
+
+    // Modals
     liveVendorOrderPopup,
     setLiveVendorOrderPopup,
     orderSuccessModal,
     setOrderSuccessModal,
+
+    // Notifications
     notifications,
-    addNotification,
-    resetAllData
+    addNotification
   };
 
   return (

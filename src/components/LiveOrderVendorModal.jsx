@@ -1,37 +1,41 @@
 import React from 'react';
 import { useCampus } from '../context/CampusContext';
-import { Bell, Check, X, Clock, User, ShieldCheck, ShoppingBag } from 'lucide-react';
+import { Bell, Check, X, User, ShoppingBag, ShieldCheck, Hash } from 'lucide-react';
 
 export default function LiveOrderVendorModal() {
   const { liveVendorOrderPopup, setLiveVendorOrderPopup, acceptOrder, rejectOrder, activeRole } = useCampus();
 
   if (!liveVendorOrderPopup) return null;
 
-  // Only show when in vendor role or split mode
+  // Only show when in vendor role or split presentation mode
   if (activeRole !== 'vendor' && activeRole !== 'split') return null;
 
   const order = liveVendorOrderPopup;
+  const orderId = order.id || order.orderId;
+  const orderNumber = order.order_number || order.orderNumber || 'CB-10245';
+  const studentName = order.students?.full_name || order.studentName || 'Student';
+  const studentId = order.students?.student_id || order.studentId || '23AIML001';
+  const totalAmount = Number(order.total_amount || order.totalAmount || 0);
+  const paymentStatus = order.payment_status || order.paymentStatus || 'PAID';
+  const items = order.order_items || order.items || order.foodItems || [];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-slate-900 border-2 border-orange-500 rounded-3xl max-w-md w-full shadow-2xl p-5 text-white space-y-4 relative overflow-hidden animate-scale-up">
-        {/* Glow ambient */}
-        <div className="absolute -top-16 -right-16 w-36 h-36 bg-orange-500/20 rounded-full blur-2xl pointer-events-none"></div>
+    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+      <div className="bg-slate-900 border-2 border-indigo-500 rounded-3xl max-w-sm w-full shadow-2xl p-5 text-white space-y-4 relative overflow-hidden animate-scaleUp">
+        {/* Ambient Glow */}
+        <div className="absolute -top-16 -right-16 w-36 h-36 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none"></div>
 
-        {/* Modal Header */}
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center border border-orange-500/40 animate-pulse">
-              <Bell className="w-5 h-5 text-orange-400" />
+            <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/40 animate-bounce">
+              <Bell className="w-5 h-5 text-indigo-400" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-extrabold text-sm sm:text-base text-white">🔔 New Order Received</h3>
-                <span className="bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40">
-                  ACTION NEEDED
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 font-mono">Order #{order.orderId} • {order.createdAt}</p>
+              <h3 className="font-extrabold text-base text-white flex items-center gap-1.5">
+                🔔 NEW ORDER
+              </h3>
+              <p className="text-xs text-indigo-400 font-mono font-bold">#{orderNumber}</p>
             </div>
           </div>
           <button
@@ -43,72 +47,71 @@ export default function LiveOrderVendorModal() {
         </div>
 
         {/* Student Information */}
-        <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-3 flex items-center justify-between text-xs">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5 font-bold text-white">
-              <User className="w-3.5 h-3.5 text-orange-400" />
-              <span>{order.studentName}</span>
-            </div>
-            <div className="text-[11px] text-slate-400 font-mono">
-              Roll No: <strong className="text-slate-200">{order.studentId}</strong> • {order.studentDept}
-            </div>
-          </div>
-          <div className="text-right">
-            <span className="bg-emerald-500/20 text-emerald-300 font-bold text-[10px] px-2 py-0.5 rounded-md border border-emerald-500/30 block font-mono">
-              {order.paymentStatus}
+        <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-400 flex items-center gap-1">
+              <User className="w-3.5 h-3.5 text-indigo-400" /> Student:
             </span>
-            <span className="text-[10px] text-slate-400">{order.paymentMethod}</span>
+            <strong className="text-white text-sm">{studentName}</strong>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-slate-400 flex items-center gap-1">
+              <Hash className="w-3.5 h-3.5 text-indigo-400" /> Student ID:
+            </span>
+            <strong className="text-slate-200 font-mono">{studentId}</strong>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-slate-400 flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Payment:
+            </span>
+            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold font-mono text-[10px]">
+              {paymentStatus}
+            </span>
           </div>
         </div>
 
         {/* Ordered Food Items */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-            <ShoppingBag className="w-3.5 h-3.5 text-orange-400" />
-            <span>Items to Prepare ({order.quantities})</span>
+            <ShoppingBag className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Items Ordered:</span>
           </h4>
 
-          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 space-y-2 max-h-40 overflow-y-auto">
-            {order.foodItems.map((item, idx) => (
-              <div key={idx} className="flex items-start justify-between text-xs text-slate-300">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-1.5 font-semibold text-white">
-                    <span className="w-2 h-2 rounded-full bg-orange-400"></span>
-                    <span>{item.quantity}x {item.name}</span>
-                  </div>
-                  {item.notes && (
-                    <span className="text-[10px] text-amber-300 italic block pl-3">
-                      Note: "{item.notes}"
-                    </span>
-                  )}
-                </div>
-                <span className="font-mono text-slate-400">₹{item.price * item.quantity}</span>
+          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 space-y-1.5 max-h-40 overflow-y-auto text-xs">
+            {items.map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between text-slate-200">
+                <span className="font-medium">
+                  {item.quantity} × {item.food_name_snapshot || item.name}
+                </span>
+                <span className="font-mono text-slate-400">
+                  ₹{Number(item.price_snapshot || item.price || 0) * item.quantity}
+                </span>
               </div>
             ))}
 
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-400">Total Bill Amount:</span>
-              <strong className="text-base text-white font-bold">₹{order.totalAmount}</strong>
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs font-bold">
+              <span className="text-slate-400">Total:</span>
+              <span className="text-amber-400 text-sm font-mono">₹{totalAmount.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons: Accept / Reject */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        {/* Action Buttons: ACCEPT ORDER / REJECT ORDER */}
+        <div className="grid grid-cols-2 gap-2.5 pt-1">
           <button
-            onClick={() => rejectOrder(order.orderId, 'Counter busy / Item unavailable')}
-            className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 font-bold py-2.5 px-4 rounded-xl text-xs transition border border-slate-700"
+            onClick={() => acceptOrder(orderId)}
+            className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black py-3 px-4 rounded-xl text-xs sm:text-sm shadow-lg shadow-emerald-500/20 transition active:scale-98"
           >
-            <X className="w-4 h-4" />
-            <span>Reject Order</span>
+            <Check className="w-4 h-4" />
+            <span>ACCEPT ORDER</span>
           </button>
 
           <button
-            onClick={() => acceptOrder(order.orderId)}
-            className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs transition shadow-lg shadow-orange-500/30 active:scale-95"
+            onClick={() => rejectOrder(orderId, 'Counter busy / Item unavailable')}
+            className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-750 text-rose-400 font-bold py-3 px-4 rounded-xl text-xs sm:text-sm transition border border-slate-700 active:scale-98"
           >
-            <Check className="w-4 h-4" />
-            <span>Accept Order (Start Prep)</span>
+            <X className="w-4 h-4" />
+            <span>REJECT ORDER</span>
           </button>
         </div>
       </div>

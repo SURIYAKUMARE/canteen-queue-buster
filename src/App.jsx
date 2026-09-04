@@ -16,6 +16,9 @@ import VendorBottomNav from './components/VendorBottomNav';
 import FoodDetailModal from './components/FoodDetailModal';
 import CartDrawer from './components/CartDrawer';
 import CheckoutModal from './components/CheckoutModal';
+import { PaymentModal } from './components/PaymentModal';
+import { AuthModal } from './components/AuthModal';
+import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import OrderSuccessModal from './components/OrderSuccessModal';
 import LiveOrderVendorModal from './components/LiveOrderVendorModal';
 import NotificationToaster from './components/NotificationToaster';
@@ -50,7 +53,7 @@ class ErrorBoundary extends Component {
                 this.setState({ hasError: false, error: null });
                 window.location.reload();
               }}
-              className="bg-orange-500 hover:bg-orange-600 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition shadow-md"
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition shadow-md"
             >
               Reload Application
             </button>
@@ -63,13 +66,34 @@ class ErrorBoundary extends Component {
 }
 
 function MainView() {
-  const { activeRole, studentTab, vendorTab } = useCampus();
+  const { activeRole, studentTab, vendorTab, currentUser, openAuthModal } = useCampus();
 
   if (activeRole === 'split') {
     return <SplitScreenDemo />;
   }
 
   if (activeRole === 'vendor') {
+    // Role-based protection check
+    if (currentUser?.profile?.role === 'student') {
+      return (
+        <div className="flex-1 w-full max-w-md mx-auto py-12 px-4 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto text-2xl">
+            🔒
+          </div>
+          <h2 className="text-lg font-bold text-white">Vendor Portal Access Restricted</h2>
+          <p className="text-xs text-slate-400">
+            You are logged in with a Student account. Only registered canteen vendors are authorized to manage kitchen orders and scan customer passes.
+          </p>
+          <button
+            onClick={() => openAuthModal('vendor')}
+            className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition"
+          >
+            Switch / Log In as Vendor
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 w-full max-w-lg mx-auto py-4">
         {vendorTab === 'dashboard' && <VendorDashboard />}
@@ -95,21 +119,54 @@ function MainView() {
   );
 }
 
+function AppModals() {
+  const {
+    isPaymentModalOpen,
+    setIsPaymentModalOpen,
+    pendingCheckoutOrder,
+    handlePaymentCompleted,
+    authModalOpen,
+    setAuthModalOpen,
+    authModalInitialRole,
+    supabaseConfigModalOpen,
+    setSupabaseConfigModalOpen
+  } = useCampus();
+
+  return (
+    <>
+      <FoodDetailModal />
+      <CartDrawer />
+      <CheckoutModal />
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        pendingOrder={pendingCheckoutOrder}
+        onPaymentSuccess={handlePaymentCompleted}
+      />
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialRole={authModalInitialRole}
+      />
+      <SupabaseConfigModal
+        isOpen={supabaseConfigModalOpen}
+        onClose={() => setSupabaseConfigModalOpen(false)}
+      />
+      <OrderSuccessModal />
+      <LiveOrderVendorModal />
+      <NotificationToaster />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <CampusProvider>
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-orange-500 selection:text-white">
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-amber-500 selection:text-slate-950">
           <TopBar />
           <MainView />
-          
-          {/* Global Modals & Notifications */}
-          <FoodDetailModal />
-          <CartDrawer />
-          <CheckoutModal />
-          <OrderSuccessModal />
-          <LiveOrderVendorModal />
-          <NotificationToaster />
+          <AppModals />
         </div>
       </CampusProvider>
     </ErrorBoundary>
