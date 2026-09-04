@@ -43,14 +43,19 @@ export default function StudentHome() {
     { id: 'Combos', label: 'Student Combos', icon: '🔥' },
   ];
 
-  const filteredMenu = menu.filter(item => {
+  const filteredMenu = (menu || []).filter(item => {
+    if (!item) return false;
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          item.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const name = (item.name || '').toLowerCase();
+    const desc = (item.description || '').toLowerCase();
+    const q = (searchQuery || '').toLowerCase();
+    const matchesSearch = name.includes(q) || desc.includes(q);
     return matchesCategory && matchesSearch;
   });
 
-  const featuredItems = menu.filter(item => item.tags && item.tags.some(t => t.includes('Special') || t.includes('Best Seller') || t.includes('Combo')));
+  const featuredItems = (menu || []).filter(item => item?.tags && item.tags.some(t => t.includes('Special') || t.includes('Best Seller') || t.includes('Combo')));
+
+  const studentFirstName = (studentUser?.name || 'Student').split(' ')[0];
 
   return (
     <div className="max-w-md mx-auto space-y-5 pb-24 px-4 text-white animate-fade-in">
@@ -60,7 +65,7 @@ export default function StudentHome() {
           <div>
             <span className="text-[11px] text-slate-400 font-medium">Welcome to Campus Dining</span>
             <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-1.5">
-              <span>Hi, {studentUser.name.split(' ')[0]}</span>
+              <span>Hi, {studentFirstName}</span>
               <span className="animate-wiggle">👋</span>
             </h2>
           </div>
@@ -169,6 +174,12 @@ export default function StudentHome() {
           filteredMenu.map((item) => {
             const cartEntry = cart[item.id];
             const inCartQty = cartEntry ? cartEntry.quantity : 0;
+            const isVeg = item.isVeg !== false && item.is_veg !== false;
+            const isAvailable = item.available !== false && item.is_available !== false;
+            const imgUrl = item.image || item.image_url || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300';
+            const prepMins = item.prepTimeMinutes || item.prep_time || 5;
+            const rating = item.rating || 4.8;
+            const price = Number(item.price || 0);
 
             return (
               <div
@@ -181,53 +192,53 @@ export default function StudentHome() {
                   className="relative w-20 h-20 rounded-2xl overflow-hidden bg-slate-800 shrink-0 cursor-pointer"
                 >
                   <img
-                    src={item.image}
+                    src={imgUrl}
                     alt={item.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                   />
                   <div className="absolute top-1.5 left-1.5 bg-slate-950/80 backdrop-blur-sm p-1 rounded-md">
-                    <span className={`block w-2 h-2 rounded-full ${item.isVeg ? 'bg-emerald-400' : 'bg-rose-500'}`} />
+                    <span className={`block w-2 h-2 rounded-full ${isVeg ? 'bg-emerald-400' : 'bg-rose-500'}`} />
                   </div>
                 </div>
 
-                {/* Details */}
-                <div 
-                  onClick={() => setSelectedFoodDetail(item)}
-                  className="flex-1 min-w-0 space-y-1 cursor-pointer"
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <h4 className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-orange-400 transition">
-                      {item.name}
-                    </h4>
-                  </div>
+                      {/* Details */}
+                      <div 
+                        onClick={() => setSelectedFoodDetail(item)}
+                        className="flex-1 min-w-0 space-y-1 cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-amber-400 transition">
+                            {item.name}
+                          </h4>
+                        </div>
 
-                  <p className="text-[11px] text-slate-400 line-clamp-1 leading-relaxed">
-                    {item.description}
-                  </p>
+                        <p className="text-[11px] text-slate-400 line-clamp-1 leading-relaxed">
+                          {item.description}
+                        </p>
 
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 pt-0.5 font-mono">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-orange-400" />
-                      <span>~{item.prepTimeMinutes}m</span>
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-0.5 text-amber-400">
-                      <Star className="w-3 h-3 fill-amber-400" />
-                      <span>{item.rating}</span>
-                    </span>
-                    {!item.available && (
-                      <span className="text-rose-400 font-bold ml-auto">SOLD OUT</span>
-                    )}
-                  </div>
-                </div>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400 pt-0.5 font-mono">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-amber-400" />
+                            <span>~{prepMins}m</span>
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-0.5 text-amber-400">
+                            <Star className="w-3 h-3 fill-amber-400" />
+                            <span>{rating}</span>
+                          </span>
+                          {!isAvailable && (
+                            <span className="text-rose-400 font-bold ml-auto">SOLD OUT</span>
+                          )}
+                        </div>
+                      </div>
 
-                {/* Price & Add Controller */}
-                <div className="flex flex-col items-end justify-between self-stretch shrink-0">
-                  <span className="font-mono font-black text-sm text-orange-400">
-                    ₹{item.price}
-                  </span>
+                      {/* Price & Add Controller */}
+                      <div className="flex flex-col items-end justify-between self-stretch shrink-0">
+                        <span className="font-mono font-black text-sm text-amber-400">
+                          ₹{price.toFixed(2)}
+                        </span>
 
-                  {item.available ? (
+                        {isAvailable ? (
                     inCartQty === 0 ? (
                       <button
                         onClick={() => addToCart(item)}

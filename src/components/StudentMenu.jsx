@@ -11,11 +11,15 @@ export default function StudentMenu() {
 
   const categories = ['All', 'Breakfast', 'Lunch', 'Snacks', 'Drinks', 'Combos'];
 
-  const filtered = menu.filter(item => {
+  const filtered = (menu || []).filter(item => {
+    if (!item) return false;
     const matchCat = selectedCat === 'All' || item.category === selectedCat;
-    const matchVeg = !vegOnly || item.isVeg;
-    const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
-                        item.description.toLowerCase().includes(search.toLowerCase());
+    const isVegItem = item.isVeg !== false && item.is_veg !== false;
+    const matchVeg = !vegOnly || isVegItem;
+    const name = (item.name || '').toLowerCase();
+    const desc = (item.description || '').toLowerCase();
+    const q = (search || '').toLowerCase();
+    const matchSearch = name.includes(q) || desc.includes(q);
     return matchCat && matchVeg && matchSearch;
   });
 
@@ -82,6 +86,13 @@ export default function StudentMenu() {
             const cartEntry = cart[item.id];
             const inCartQty = cartEntry ? cartEntry.quantity : 0;
 
+            const isVeg = item.isVeg !== false && item.is_veg !== false;
+            const isAvailable = item.available !== false && item.is_available !== false;
+            const imgUrl = item.image || item.image_url || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300';
+            const prepMins = item.prepTimeMinutes || item.prep_time || 5;
+            const rating = item.rating || 4.8;
+            const price = Number(item.price || 0);
+
             return (
               <div
                 key={item.id}
@@ -92,12 +103,12 @@ export default function StudentMenu() {
                   className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-slate-800 shrink-0 cursor-pointer"
                 >
                   <img
-                    src={item.image}
+                    src={imgUrl}
                     alt={item.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                   />
                   <div className="absolute top-1.5 left-1.5 bg-slate-950/80 p-1 rounded-md">
-                    <span className={`block w-2 h-2 rounded-full ${item.isVeg ? 'bg-emerald-400' : 'bg-rose-500'}`} />
+                    <span className={`block w-2 h-2 rounded-full ${isVeg ? 'bg-emerald-400' : 'bg-rose-500'}`} />
                   </div>
                 </div>
 
@@ -105,7 +116,7 @@ export default function StudentMenu() {
                   onClick={() => setSelectedFoodDetail(item)}
                   className="flex-1 min-w-0 space-y-1 cursor-pointer"
                 >
-                  <h4 className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-orange-400 transition">
+                  <h4 className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-amber-400 transition">
                     {item.name}
                   </h4>
                   <p className="text-[11px] text-slate-400 line-clamp-1 leading-relaxed">
@@ -113,23 +124,26 @@ export default function StudentMenu() {
                   </p>
                   <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
                     <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-orange-400" />
-                      <span>{item.prepTimeMinutes}m</span>
+                      <Clock className="w-3 h-3 text-amber-400" />
+                      <span>{prepMins}m</span>
                     </span>
                     <span>•</span>
                     <span className="flex items-center gap-0.5 text-amber-400">
                       <Star className="w-3 h-3 fill-amber-400" />
-                      <span>{item.rating}</span>
+                      <span>{rating}</span>
                     </span>
+                    {!isAvailable && (
+                      <span className="text-rose-400 font-bold ml-auto">SOLD OUT</span>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex flex-col items-end justify-between self-stretch shrink-0">
-                  <span className="font-mono font-black text-sm text-orange-400">
-                    ₹{item.price}
+                  <span className="font-mono font-black text-sm text-amber-400">
+                    ₹{price.toFixed(2)}
                   </span>
 
-                  {item.available ? (
+                  {isAvailable ? (
                     inCartQty === 0 ? (
                       <button
                         onClick={() => addToCart(item)}

@@ -97,15 +97,21 @@ const DEFAULT_FOOD_ITEMS = initialCampusMenu.map((m, idx) => ({
   id: `a0000001-0000-0000-0000-${String(idx + 1).padStart(12, '0')}`,
   vendor_id: DEFAULT_VENDORS[0].id,
   name: m.name,
-  description: m.description,
-  category: m.category,
-  price: m.price,
+  description: m.description || '',
+  category: m.category || 'Snacks',
+  price: Number(m.price) || 50,
+  image: m.image,
   image_url: m.image,
   is_available: m.isAvailable !== false,
+  available: m.isAvailable !== false,
   stock_quantity: 40,
-  is_veg: m.isVeg,
-  prep_time: m.prepTime,
-  calories: m.calories,
+  is_veg: m.isVeg !== false,
+  isVeg: m.isVeg !== false,
+  prep_time: m.prepTimeMinutes || m.prepTime || 5,
+  prepTimeMinutes: m.prepTimeMinutes || m.prepTime || 5,
+  calories: m.calories || '350 kcal',
+  rating: m.rating || 4.8,
+  tags: m.tags || ['Popular'],
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString()
 }));
@@ -125,30 +131,54 @@ if (typeof window !== 'undefined') {
     setLocalTable('students', DEFAULT_STUDENTS);
   }
   if (!localStorage.getItem(STORAGE_PREFIX + 'orders')) {
-    // Transform seed orders to match Supabase schema
-    const seed = initialSeedOrders.map((ord, idx) => ({
-      id: `ord-uuid-${idx + 1}`,
-      order_number: ord.orderNumber,
-      student_id: DEFAULT_STUDENTS[0].id,
-      vendor_id: DEFAULT_VENDORS[0].id,
-      subtotal: ord.totalAmount,
-      total_amount: ord.totalAmount,
-      payment_status: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
-      order_status: ord.status,
-      qr_token: ord.qrToken || `qr-tok-${idx + 1}-${Math.random().toString(36).substring(2, 9)}`,
-      qr_generated_at: ord.placedAt,
-      qr_scanned_at: ord.status === 'COMPLETED' ? new Date().toISOString() : null,
-      notes: ord.notes || '',
-      created_at: new Date(Date.now() - (idx * 20 * 60 * 1000)).toISOString(),
-      updated_at: new Date().toISOString(),
-      items: ord.items.map(it => ({
-        id: `oi-${Math.random().toString(36).substring(2, 8)}`,
-        food_name_snapshot: it.name,
-        quantity: it.quantity,
-        price_snapshot: it.price,
-        subtotal: it.price * it.quantity
-      }))
-    }));
+    // Transform seed orders to match Supabase schema safely
+    const seed = (initialSeedOrders || []).map((ord, idx) => {
+      const orderItems = ord.foodItems || ord.items || [];
+      const orderNum = ord.orderId || ord.orderNumber || `CB-849${idx + 1}`;
+      const amount = Number(ord.totalAmount) || 100;
+      const status = ord.orderStatus || ord.status || 'PAID';
+
+      return {
+        id: `ord-uuid-${idx + 1}`,
+        order_number: orderNum,
+        orderId: orderNum,
+        student_id: DEFAULT_STUDENTS[0].id,
+        studentId: ord.studentId || '21BCS042',
+        studentName: ord.studentName || 'Rahul Sharma',
+        vendor_id: DEFAULT_VENDORS[0].id,
+        subtotal: amount,
+        total_amount: amount,
+        totalAmount: amount,
+        payment_status: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+        paymentStatus: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+        order_status: status,
+        orderStatus: status,
+        qr_token: ord.qrToken || `qr-tok-${idx + 1}-${Math.random().toString(36).substring(2, 9)}`,
+        qr_generated_at: new Date().toISOString(),
+        qr_scanned_at: status === 'COMPLETED' ? new Date().toISOString() : null,
+        notes: ord.notes || '',
+        created_at: new Date(Date.now() - (idx * 20 * 60 * 1000)).toISOString(),
+        updated_at: new Date().toISOString(),
+        items: orderItems.map(it => ({
+          id: `oi-${Math.random().toString(36).substring(2, 8)}`,
+          name: it.name,
+          food_name_snapshot: it.name,
+          quantity: it.quantity || 1,
+          price: it.price || 50,
+          price_snapshot: it.price || 50,
+          subtotal: (it.price || 50) * (it.quantity || 1)
+        })),
+        foodItems: orderItems.map(it => ({
+          id: `oi-${Math.random().toString(36).substring(2, 8)}`,
+          name: it.name,
+          food_name_snapshot: it.name,
+          quantity: it.quantity || 1,
+          price: it.price || 50,
+          price_snapshot: it.price || 50,
+          subtotal: (it.price || 50) * (it.quantity || 1)
+        }))
+      };
+    });
     setLocalTable('orders', seed);
   }
 }
