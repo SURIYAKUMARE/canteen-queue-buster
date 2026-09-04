@@ -22,42 +22,28 @@ export function CampusProvider({ children }) {
   const [vendorTab, setVendorTab] = useState('dashboard');
   const [vendorOrderFilter, setVendorOrderFilter] = useState('ALL');
 
-  // Auth & Profile state
-  const [currentUser, setCurrentUser] = useState({
-    profile: {
-      id: '00000000-0000-0000-0000-000000000002',
-      full_name: 'Rahul Sharma',
-      email: 'rahul.sharma@college.edu',
-      phone: '+91 98765 43210',
-      role: 'student'
-    },
-    student: {
-      id: '22222222-2222-2222-2222-222222222222',
-      student_id: '21BCS042',
-      college_email: 'rahul.sharma@college.edu',
-      phone: '+91 98765 43210'
-    }
-  });
+  // Auth & Profile state - null initially so "Who are you?" is displayed
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [studentUser, setStudentUser] = useState({
-    id: 'STU-2024-8842',
-    name: 'Rahul Sharma',
-    rollNo: '21BCS042',
+    id: '22222222-2222-2222-2222-222222222222',
+    name: 'Arun Kumar',
+    rollNo: 'STU001',
     dept: 'Computer Science',
     year: '3rd Year',
-    email: 'rahul.sharma@college.edu',
+    email: 'stu001@college.edu',
     phone: '+91 98765 43210',
     walletBalance: 450,
-    isLoggedIn: true
+    isLoggedIn: false
   });
 
   const [vendorUser, setVendorUser] = useState({
     id: '11111111-1111-1111-1111-111111111111',
-    name: 'Campus Central Kitchen',
+    name: 'Campus Central Canteen',
     counterBay: 'Bay 1 (Express) & Bay 2 (Hot Meals)',
-    email: 'canteen@college.edu',
+    email: 'ven001@college.edu',
     operatingHours: '8:00 AM - 6:30 PM',
-    isLoggedIn: true
+    isLoggedIn: false
   });
 
   // Food Menu
@@ -263,6 +249,7 @@ export function CampusProvider({ children }) {
 
   // Initiate Checkout Flow: Creates PENDING_PAYMENT order and opens Payment Modal
   const initiateCheckout = async ({ notes = '' } = {}) => {
+    console.log('INITIATE CHECKOUT CALLED! cartItemsArray length:', cartItemsArray.length);
     if (!cartItemsArray.length) {
       alert('Your cart is empty. Add food items before checkout.');
       return;
@@ -277,15 +264,20 @@ export function CampusProvider({ children }) {
         notes: item.notes
       }));
 
+      console.log('Calling databaseService.createPendingOrder with items:', orderItems);
+
       // Create Order in Supabase with PENDING status
       const createdOrder = await databaseService.createPendingOrder({
         studentId: currentUser?.student?.id || studentUser.id,
         vendorId: vendorUser.id,
+        studentName: currentUser?.profile?.full_name || studentUser.name,
         items: orderItems,
         subtotal: cartTotal,
         totalAmount: cartTotal,
         notes
       });
+
+      console.log('createPendingOrder completed successfully:', createdOrder);
 
       setPendingCheckoutOrder(createdOrder);
       setIsCheckoutOpen(false);
@@ -304,7 +296,8 @@ export function CampusProvider({ children }) {
     setIsPaymentModalOpen(false);
     setPendingCheckoutOrder(null);
     setActiveStudentOrder(confirmedOrder);
-    setOrderSuccessModal(confirmedOrder);
+    setOrderSuccessModal(null);
+    setStudentTab('qr');
     fetchOrders();
   };
 
@@ -444,9 +437,16 @@ export function CampusProvider({ children }) {
   };
 
   const handleLogout = async () => {
-    await databaseService.signOut();
+    console.log('>>> [CampusContext] handleLogout invoked!');
+    try {
+      await databaseService.signOut();
+    } catch (e) {
+      console.warn('Signout warning:', e);
+    }
     setCurrentUser(null);
-    setAuthModalOpen(true);
+    setActiveRole('student');
+    setStudentTab('menu');
+    setVendorTab('dashboard');
   };
 
   const value = {

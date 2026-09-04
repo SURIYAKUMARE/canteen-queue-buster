@@ -13,11 +13,11 @@ export default function NotificationToaster() {
   if (!relevantNotifs.length) return null;
 
   return (
-    <div className="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    <div className="fixed bottom-24 right-4 z-30 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-2">
       {relevantNotifs.map(n => (
         <div 
           key={n.id}
-          className="pointer-events-auto bg-slate-900/95 border-2 border-orange-500/60 rounded-2xl p-3.5 shadow-2xl backdrop-blur-md text-white flex items-start gap-3 animate-slide-down transition"
+          className="pointer-events-none bg-slate-900/95 border border-amber-500/50 rounded-2xl p-3 shadow-2xl backdrop-blur-md text-white flex items-start gap-3 animate-slide-down transition"
         >
           <div className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/40">
             {n.type === 'ready' || n.type === 'completed' ? (

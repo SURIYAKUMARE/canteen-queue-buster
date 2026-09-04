@@ -71,7 +71,8 @@ CREATE TABLE IF NOT EXISTS public.food_items (
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_number TEXT UNIQUE NOT NULL, -- e.g. CB-10245
+    order_number TEXT UNIQUE NOT NULL, -- e.g. ORD1001
+    token_number TEXT, -- e.g. TKN245
     student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
     vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
     subtotal NUMERIC(10,2) NOT NULL CHECK (subtotal >= 0),
@@ -373,22 +374,22 @@ DECLARE
 BEGIN
     -- Insert default vendor profile if not exists
     INSERT INTO public.profiles (id, auth_user_id, full_name, email, phone, role)
-    VALUES (v_profile_id, NULL, 'Campus Central Canteen', 'canteen@college.edu', '+91 98765 00001', 'vendor')
+    VALUES (v_profile_id, NULL, 'Campus Central Canteen', 'ven001@college.edu', '+91 98765 00001', 'vendor')
     ON CONFLICT (id) DO NOTHING;
 
     -- Insert default vendor record if not exists
     INSERT INTO public.vendors (id, profile_id, vendor_id, vendor_name, phone, is_active)
-    VALUES (v_vendor_id, v_profile_id, 'VND-01', 'Campus Central Kitchen (Bay 1 & 2)', '+91 98765 00001', true)
+    VALUES (v_vendor_id, v_profile_id, 'VEN001', 'Campus Central Canteen', '+91 98765 00001', true)
     ON CONFLICT (id) DO NOTHING;
 
     -- Insert demo student profile if not exists
     INSERT INTO public.profiles (id, auth_user_id, full_name, email, phone, role)
-    VALUES (s_profile_id, NULL, 'Rahul Sharma', 'rahul.sharma@college.edu', '+91 98765 43210', 'student')
+    VALUES (s_profile_id, NULL, 'Arun Kumar', 'stu001@college.edu', '+91 98765 43210', 'student')
     ON CONFLICT (id) DO NOTHING;
 
     -- Insert demo student record if not exists
     INSERT INTO public.students (id, profile_id, student_id, college_email, phone)
-    VALUES (s_student_id, s_profile_id, '21BCS042', 'rahul.sharma@college.edu', '+91 98765 43210')
+    VALUES (s_student_id, s_profile_id, 'STU001', 'stu001@college.edu', '+91 98765 43210')
     ON CONFLICT (id) DO NOTHING;
 
     -- Seed food items

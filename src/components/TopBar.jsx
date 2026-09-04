@@ -30,7 +30,7 @@ export default function TopBar() {
   const userDisplayName = currentUser?.profile?.full_name || (activeRole === 'student' ? 'Rahul Sharma' : 'Central Canteen');
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800">
+    <header className="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-md border-b border-slate-800">
       {/* Top Banner */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
         {/* Brand */}
@@ -121,18 +121,36 @@ export default function TopBar() {
             </button>
           </div>
 
-          {/* User Profile / Auth Button */}
-          <button
-            onClick={() => openAuthModal(activeRole === 'vendor' ? 'vendor' : 'student')}
-            className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-200 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition"
-            title="User Profile & Authentication"
-          >
-            <User className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden md:inline truncate max-w-[100px]">{userDisplayName}</span>
-          </button>
+          {/* User Profile & Switch Role / Logout Button */}
+          {currentUser ? (
+            <div className="flex items-center gap-1.5">
+              <div className="hidden sm:flex items-center gap-1.5 bg-slate-900 border border-slate-800 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                <User className="w-3.5 h-3.5 text-amber-400" />
+                <span>
+                  {currentUser.profile?.role === 'vendor' 
+                    ? 'Campus Central Canteen (VEN001)' 
+                    : `${currentUser.profile?.full_name || 'Arun Kumar'} (${currentUser.student?.student_id || 'STU001'})`}
+                </span>
+              </div>
+
+              <button
+                id="switch-role-btn"
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
+                title="Log out and return to 'Who are you?' screen"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="text-[11px]">Switch Role</span>
+              </button>
+            </div>
+          ) : (
+            <div className="text-[11px] font-mono text-amber-400/90 bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/30">
+              Demo Ready
+            </div>
+          )}
 
           {/* Cart Icon (Student view) */}
-          {activeRole === 'student' && (
+          {currentUser && activeRole === 'student' && (
             <button
               onClick={() => setIsCartOpen(true)}
               className="relative p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition"

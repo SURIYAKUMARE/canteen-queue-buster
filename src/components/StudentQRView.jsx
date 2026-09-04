@@ -18,20 +18,31 @@ export default function StudentQRView() {
   const [qrDataUrl, setQrDataUrl] = useState('');
 
   const order = activeStudentOrder;
+  const orderNumber = order?.order_number || order?.orderNumber || 'ORD1001';
+  const tokenNumber = order?.token_number || order?.tokenNumber || 'TKN245';
+  const orderStatus = order?.order_status || order?.orderStatus || 'PAID';
+  const paymentStatus = order?.payment_status || order?.paymentStatus || 'PAID';
+  const totalAmount = Number(order?.total_amount || order?.totalAmount || 0);
+  const items = order?.order_items || order?.items || order?.foodItems || [];
+  const studentName = currentUser?.profile?.full_name || order?.studentName || studentUser.name || 'Arun Kumar';
+  const studentId = currentUser?.student?.student_id || order?.studentId || studentUser.rollNo || 'STU001';
 
   useEffect(() => {
     if (!order) return;
     const generateQR = async () => {
-      const orderId = order.id || order.orderId;
-      const orderNumber = order.order_number || order.orderNumber;
-      const token = order.qr_token || order.token || 'sec-tok-default';
+      const orderId = order.order_number || order.orderId || order.id;
+      const token = order.qr_token || order.token || 'SEC-TOK-DEMO';
       const vendorId = order.vendor_id || order.vendorId;
 
       const payload = {
         orderId,
-        orderNumber,
+        orderNumber: orderId,
+        tokenNumber,
+        studentName,
+        studentId,
         token,
-        vendorId
+        vendorId,
+        amount: totalAmount
       };
 
       try {
@@ -43,7 +54,7 @@ export default function StudentQRView() {
     };
 
     generateQR();
-  }, [order]);
+  }, [order, orderNumber, tokenNumber, studentName, studentId, totalAmount]);
 
   if (!order) {
     return (
@@ -53,7 +64,7 @@ export default function StudentQRView() {
         </div>
         <h3 className="text-lg font-bold text-white">No Active QR Pass Found</h3>
         <p className="text-xs text-slate-400 max-w-xs mx-auto">
-          You have not placed an order yet. Select delicious food from the menu and complete payment to get your unique pickup pass.
+          You have not placed an order yet. Select food from the menu and complete payment to get your unique pickup pass.
         </p>
         <button
           onClick={() => setStudentTab('menu')}
@@ -64,14 +75,6 @@ export default function StudentQRView() {
       </div>
     );
   }
-
-  const orderNumber = order.order_number || order.orderNumber || 'CB-00000';
-  const orderStatus = order.order_status || order.orderStatus || 'PAID';
-  const paymentStatus = order.payment_status || order.paymentStatus || 'PAID';
-  const totalAmount = Number(order.total_amount || order.totalAmount || 0);
-  const items = order.order_items || order.items || order.foodItems || [];
-  const studentName = currentUser?.profile?.full_name || studentUser.name;
-  const studentId = currentUser?.student?.student_id || studentUser.rollNo;
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -86,7 +89,7 @@ export default function StudentQRView() {
       case 'READY':
         return { label: '🔔 Ready for Pickup at Counter!', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse' };
       case 'COMPLETED':
-        return { label: '✓ Food Collected Successfully', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' };
+        return { label: '✓ Food Handed Over Successfully', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' };
       case 'CANCELLED':
         return { label: 'Order Cancelled', color: 'bg-rose-500/20 text-rose-300 border-rose-500/40' };
       default:
@@ -102,7 +105,7 @@ export default function StudentQRView() {
       <div className="text-center space-y-1">
         <h2 className="text-xl font-black text-white tracking-tight flex items-center justify-center gap-1.5">
           <QrCode className="w-5 h-5 text-amber-400" />
-          <span>Unique Digital Pickup Pass</span>
+          <span>Digital Pickup Pass</span>
         </h2>
         <p className="text-xs text-slate-400">
           Generated securely from database order #{orderNumber}
@@ -110,21 +113,37 @@ export default function StudentQRView() {
       </div>
 
       {/* Main Dynamic QR Card */}
-      <div className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-2 border-amber-500/60 rounded-[2.5rem] p-5 sm:p-6 shadow-2xl space-y-4 text-center">
+      <div className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-2 border-amber-500/70 rounded-[2.5rem] p-5 sm:p-6 shadow-2xl space-y-4 text-center">
         {/* Glow ambient */}
         <div className="absolute -top-20 -left-20 w-40 h-40 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* Order Token Header */}
-        <div className="space-y-1 border-b border-slate-800 pb-3">
-          <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-bold uppercase tracking-wider">
+        <div className="space-y-2 border-b border-slate-800 pb-3">
+          <div className="flex items-center justify-center gap-2 text-xs text-emerald-400 font-extrabold uppercase tracking-wider">
             <CheckCircle2 className="w-4 h-4" />
-            <span>Order Confirmed ✓</span>
+            <span>Payment Successful ✓ • Order Confirmed ✓</span>
           </div>
-          <div className="text-3xl font-black font-mono tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400">
-            #{orderNumber}
+
+          <div className="grid grid-cols-2 gap-2 bg-slate-950/70 p-2.5 rounded-2xl border border-slate-800/80">
+            <div>
+              <span className="text-[10px] text-slate-400 uppercase font-semibold block">Order ID</span>
+              <div className="text-xl sm:text-2xl font-black font-mono tracking-wide text-amber-400">
+                #{orderNumber}
+              </div>
+            </div>
+            <div className="border-l border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase font-semibold block">Token Number</span>
+              <div className="text-xl sm:text-2xl font-black font-mono tracking-wide text-emerald-400">
+                {tokenNumber}
+              </div>
+            </div>
           </div>
-          <div className="text-[11px] text-slate-400 font-mono">
-            Payment Status: <strong className="text-emerald-400 font-bold">{paymentStatus}</strong>
+
+          <div className="text-[11px] text-slate-400 font-mono flex items-center justify-center gap-2">
+            <span>Payment Status:</span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold">
+              {paymentStatus}
+            </span>
           </div>
         </div>
 
@@ -173,16 +192,24 @@ export default function StudentQRView() {
             <span>Student ID:</span>
             <strong className="text-slate-200 font-bold">{studentId}</strong>
           </div>
+          <div className="flex items-center justify-between text-slate-400">
+            <span>Order ID:</span>
+            <strong className="text-amber-400 font-bold font-mono">#{orderNumber}</strong>
+          </div>
+          <div className="flex items-center justify-between text-slate-400">
+            <span>Token Number:</span>
+            <strong className="text-emerald-400 font-bold font-mono">{tokenNumber}</strong>
+          </div>
 
           <div className="pt-2 border-t border-slate-800 space-y-1">
             <span className="text-slate-400 text-[10px] block uppercase font-sans font-semibold flex items-center gap-1">
-              <ShoppingBag className="w-3 h-3 text-amber-400" /> Ordered Items:
+              <ShoppingBag className="w-3 h-3 text-amber-400" /> Food Ordered:
             </span>
             {items.map((item, idx) => (
               <div key={idx} className="flex items-center justify-between text-slate-300 font-sans">
                 <span>{item.quantity}× {item.food_name_snapshot || item.name}</span>
                 <span className="font-mono text-slate-400">
-                  ₹{Number(item.price_snapshot || item.price || 0) * item.quantity}
+                  ₹{(Number(item.price_snapshot || item.price || 0) * item.quantity).toFixed(2)}
                 </span>
               </div>
             ))}
@@ -191,6 +218,11 @@ export default function StudentQRView() {
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between font-bold text-white text-xs">
             <span>Total Amount:</span>
             <span className="text-amber-400 text-sm font-black">₹{totalAmount.toFixed(2)}</span>
+          </div>
+
+          <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/80">
+            <span>Payment Status:</span>
+            <span className="text-emerald-400 font-bold">PAID ✓</span>
           </div>
         </div>
 

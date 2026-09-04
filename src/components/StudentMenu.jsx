@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
 import { useCampus } from '../context/CampusContext';
-import { Search, Filter, Plus, Minus, Star, Clock, Flame } from 'lucide-react';
+import { Search, Filter, Plus, Minus, Star, Clock, Flame, ArrowRight, ShoppingBag } from 'lucide-react';
 
 export default function StudentMenu() {
-  const { menu, cart, addToCart, updateCartQty, setSelectedFoodDetail } = useCampus();
+  const { 
+    menu, 
+    cart, 
+    cartCount, 
+    cartTotal, 
+    addToCart, 
+    updateCartQty, 
+    setSelectedFoodDetail, 
+    initiateCheckout 
+  } = useCampus();
 
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('All');
@@ -178,6 +187,35 @@ export default function StudentMenu() {
           })
         )}
       </div>
+
+      {/* Sticky Book Food Bar */}
+      {cartCount > 0 && (
+        <div className="fixed bottom-20 sm:bottom-6 left-0 right-0 z-30 px-4 max-w-md mx-auto animate-scaleUp">
+          <div className="bg-gradient-to-r from-slate-900 to-slate-950 border-2 border-amber-500 rounded-2xl p-3.5 shadow-2xl flex items-center justify-between backdrop-blur-lg">
+            <div>
+              <span className="text-[11px] text-slate-400 block font-semibold flex items-center gap-1">
+                <ShoppingBag className="w-3 h-3 text-amber-400" />
+                {cartCount} item{cartCount > 1 ? 's' : ''} added
+              </span>
+              <div className="text-xl font-black font-mono text-amber-400">
+                ₹{cartTotal.toFixed(2)}
+              </div>
+            </div>
+
+            <button
+              id="book-food-btn"
+              onClick={() => {
+                console.log('CLICKED BOOK FOOD in StudentMenu!');
+                initiateCheckout();
+              }}
+              className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/30 flex items-center gap-2 transition active:scale-95 cursor-pointer"
+            >
+              <span>Book Food</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

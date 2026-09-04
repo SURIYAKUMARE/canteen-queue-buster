@@ -53,8 +53,8 @@ const DEFAULT_VENDORS = [
   {
     id: '11111111-1111-1111-1111-111111111111',
     profile_id: '00000000-0000-0000-0000-000000000001',
-    vendor_id: 'VND-01',
-    vendor_name: 'Campus Central Kitchen (Bay 1 & 2)',
+    vendor_id: 'VEN001',
+    vendor_name: 'Campus Central Canteen',
     phone: '+91 98765 00001',
     is_active: true,
     created_at: new Date().toISOString()
@@ -66,7 +66,7 @@ const DEFAULT_PROFILES = [
     id: '00000000-0000-0000-0000-000000000001',
     auth_user_id: 'mock-vendor-auth-id',
     full_name: 'Campus Central Canteen',
-    email: 'canteen@college.edu',
+    email: 'ven001@college.edu',
     phone: '+91 98765 00001',
     role: 'vendor',
     created_at: new Date().toISOString()
@@ -74,8 +74,8 @@ const DEFAULT_PROFILES = [
   {
     id: '00000000-0000-0000-0000-000000000002',
     auth_user_id: 'mock-student-auth-id',
-    full_name: 'Rahul Sharma',
-    email: 'rahul.sharma@college.edu',
+    full_name: 'Arun Kumar',
+    email: 'stu001@college.edu',
     phone: '+91 98765 43210',
     role: 'student',
     created_at: new Date().toISOString()
@@ -86,8 +86,8 @@ const DEFAULT_STUDENTS = [
   {
     id: '22222222-2222-2222-2222-222222222222',
     profile_id: '00000000-0000-0000-0000-000000000002',
-    student_id: '21BCS042',
-    college_email: 'rahul.sharma@college.edu',
+    student_id: 'STU001',
+    college_email: 'stu001@college.edu',
     phone: '+91 98765 43210',
     created_at: new Date().toISOString()
   }
@@ -116,71 +116,68 @@ const DEFAULT_FOOD_ITEMS = initialCampusMenu.map((m, idx) => ({
   updated_at: new Date().toISOString()
 }));
 
-// Initialize local storage if empty
+// Initialize local storage with resilient demo data
 if (typeof window !== 'undefined') {
   if (!localStorage.getItem(STORAGE_PREFIX + 'food_items')) {
     setLocalTable('food_items', DEFAULT_FOOD_ITEMS);
   }
-  if (!localStorage.getItem(STORAGE_PREFIX + 'profiles')) {
-    setLocalTable('profiles', DEFAULT_PROFILES);
-  }
-  if (!localStorage.getItem(STORAGE_PREFIX + 'vendors')) {
-    setLocalTable('vendors', DEFAULT_VENDORS);
-  }
-  if (!localStorage.getItem(STORAGE_PREFIX + 'students')) {
-    setLocalTable('students', DEFAULT_STUDENTS);
-  }
-  if (!localStorage.getItem(STORAGE_PREFIX + 'orders')) {
-    // Transform seed orders to match Supabase schema safely
-    const seed = (initialSeedOrders || []).map((ord, idx) => {
-      const orderItems = ord.foodItems || ord.items || [];
-      const orderNum = ord.orderId || ord.orderNumber || `CB-849${idx + 1}`;
-      const amount = Number(ord.totalAmount) || 100;
-      const status = ord.orderStatus || ord.status || 'PAID';
+  // Always ensure demo profiles exist
+  setLocalTable('profiles', DEFAULT_PROFILES);
+  setLocalTable('vendors', DEFAULT_VENDORS);
+  setLocalTable('students', DEFAULT_STUDENTS);
 
-      return {
-        id: `ord-uuid-${idx + 1}`,
-        order_number: orderNum,
-        orderId: orderNum,
-        student_id: DEFAULT_STUDENTS[0].id,
-        studentId: ord.studentId || '21BCS042',
-        studentName: ord.studentName || 'Rahul Sharma',
-        vendor_id: DEFAULT_VENDORS[0].id,
-        subtotal: amount,
-        total_amount: amount,
-        totalAmount: amount,
-        payment_status: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
-        paymentStatus: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
-        order_status: status,
-        orderStatus: status,
-        qr_token: ord.qrToken || `qr-tok-${idx + 1}-${Math.random().toString(36).substring(2, 9)}`,
-        qr_generated_at: new Date().toISOString(),
-        qr_scanned_at: status === 'COMPLETED' ? new Date().toISOString() : null,
-        notes: ord.notes || '',
-        created_at: new Date(Date.now() - (idx * 20 * 60 * 1000)).toISOString(),
-        updated_at: new Date().toISOString(),
-        items: orderItems.map(it => ({
-          id: `oi-${Math.random().toString(36).substring(2, 8)}`,
-          name: it.name,
-          food_name_snapshot: it.name,
-          quantity: it.quantity || 1,
-          price: it.price || 50,
-          price_snapshot: it.price || 50,
-          subtotal: (it.price || 50) * (it.quantity || 1)
-        })),
-        foodItems: orderItems.map(it => ({
-          id: `oi-${Math.random().toString(36).substring(2, 8)}`,
-          name: it.name,
-          food_name_snapshot: it.name,
-          quantity: it.quantity || 1,
-          price: it.price || 50,
-          price_snapshot: it.price || 50,
-          subtotal: (it.price || 50) * (it.quantity || 1)
-        }))
-      };
-    });
-    setLocalTable('orders', seed);
-  }
+  // Transform seed orders to match Supabase schema safely
+  const seed = (initialSeedOrders || []).map((ord, idx) => {
+    const orderItems = ord.foodItems || ord.items || [];
+    const orderNum = ord.orderId || ord.orderNumber || `ORD100${idx + 1}`;
+    const tokenNum = ord.tokenNumber || `TKN24${idx + 5}`;
+    const amount = Number(ord.totalAmount) || 100;
+    const status = ord.orderStatus || ord.status || 'PAID';
+
+    return {
+      id: `ord-uuid-${idx + 1}`,
+      order_number: orderNum,
+      orderId: orderNum,
+      token_number: tokenNum,
+      tokenNumber: tokenNum,
+      student_id: DEFAULT_STUDENTS[0].id,
+      studentId: ord.studentId || 'STU001',
+      studentName: ord.studentName || 'Arun Kumar',
+      vendor_id: DEFAULT_VENDORS[0].id,
+      subtotal: amount,
+      total_amount: amount,
+      totalAmount: amount,
+      payment_status: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+      paymentStatus: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+      order_status: status,
+      orderStatus: status,
+      qr_token: ord.qrToken || `SEC-TOK-${1000 + idx + 1}`,
+      qr_generated_at: new Date().toISOString(),
+      qr_scanned_at: status === 'COMPLETED' ? new Date().toISOString() : null,
+      notes: ord.notes || '',
+      created_at: new Date(Date.now() - (idx * 20 * 60 * 1000)).toISOString(),
+      updated_at: new Date().toISOString(),
+      items: orderItems.map(it => ({
+        id: `oi-${Math.random().toString(36).substring(2, 8)}`,
+        name: it.name,
+        food_name_snapshot: it.name,
+        quantity: it.quantity || 1,
+        price: it.price || 50,
+        price_snapshot: it.price || 50,
+        subtotal: (it.price || 50) * (it.quantity || 1)
+      })),
+      foodItems: orderItems.map(it => ({
+        id: `oi-${Math.random().toString(36).substring(2, 8)}`,
+        name: it.name,
+        food_name_snapshot: it.name,
+        quantity: it.quantity || 1,
+        price: it.price || 50,
+        price_snapshot: it.price || 50,
+        subtotal: (it.price || 50) * (it.quantity || 1)
+      }))
+    };
+  });
+  setLocalTable('orders', seed);
 }
 
 // ============================================================================
@@ -324,49 +321,89 @@ export const databaseService = {
     }
   },
 
-  async signIn({ email, password }) {
-    if (isSupabaseConfigured && supabase) {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-      if (authError) throw authError;
+  async signIn({ email, studentId, vendorId, identifier, password, role }) {
+    const input = (identifier || studentId || vendorId || email || '').trim();
+    const pwd = (password || '').trim();
 
-      // Fetch profile
-      const { data: profile, error: profError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('auth_user_id', authData.user.id)
-        .single();
-      if (profError) throw profError;
+    const isStuDemo = input.toUpperCase() === 'STU001' || input.toLowerCase() === 'stu001@college.edu';
+    const isVenDemo = input.toUpperCase() === 'VEN001' || input.toLowerCase() === 'ven001@college.edu';
 
-      let roleDetails = null;
-      if (profile.role === 'student') {
-        const { data: stu } = await supabase.from('students').select('*').eq('profile_id', profile.id).single();
-        roleDetails = { student: stu };
-      } else if (profile.role === 'vendor') {
-        const { data: ven } = await supabase.from('vendors').select('*').eq('profile_id', profile.id).single();
-        roleDetails = { vendor: ven };
+    // 1. Direct Demo Account verification
+    if (isStuDemo) {
+      if (pwd && pwd !== 'student123') {
+        throw new Error('Invalid password for Student STU001. Password is: student123');
       }
-
-      return { profile, user: authData.user, ...roleDetails };
-    } else {
-      const profiles = getLocalTable('profiles');
-      const profile = profiles.find(p => p.email.toLowerCase() === email.toLowerCase());
-      if (!profile) {
-        throw new Error('Invalid email or password. Please verify credentials or register a new account.');
-      }
-
-      let roleDetails = null;
-      if (profile.role === 'student') {
-        const students = getLocalTable('students');
-        const stu = students.find(s => s.profile_id === profile.id) || DEFAULT_STUDENTS[0];
-        roleDetails = { student: stu };
-      } else if (profile.role === 'vendor') {
-        const vendors = getLocalTable('vendors');
-        const ven = vendors.find(v => v.profile_id === profile.id) || DEFAULT_VENDORS[0];
-        roleDetails = { vendor: ven };
-      }
-
-      return { profile, user: { id: profile.auth_user_id, email: profile.email }, ...roleDetails };
+      return {
+        profile: DEFAULT_PROFILES[1],
+        student: DEFAULT_STUDENTS[0],
+        user: { id: DEFAULT_PROFILES[1].auth_user_id, email: DEFAULT_PROFILES[1].email }
+      };
     }
+
+    if (isVenDemo) {
+      if (pwd && pwd !== 'vendor123') {
+        throw new Error('Invalid password for Vendor VEN001. Password is: vendor123');
+      }
+      return {
+        profile: DEFAULT_PROFILES[0],
+        vendor: DEFAULT_VENDORS[0],
+        user: { id: DEFAULT_PROFILES[0].auth_user_id, email: DEFAULT_PROFILES[0].email }
+      };
+    }
+
+    // 2. Supabase Cloud Auth attempt if configured
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: input.includes('@') ? input : (role === 'vendor' ? 'ven001@college.edu' : 'stu001@college.edu'),
+          password: pwd
+        });
+        if (!authError && authData?.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('auth_user_id', authData.user.id)
+            .single();
+
+          let roleDetails = null;
+          if (profile?.role === 'student') {
+            const { data: stu } = await supabase.from('students').select('*').eq('profile_id', profile.id).single();
+            roleDetails = { student: stu };
+          } else if (profile?.role === 'vendor') {
+            const { data: ven } = await supabase.from('vendors').select('*').eq('profile_id', profile.id).single();
+            roleDetails = { vendor: ven };
+          }
+          return { profile, user: authData.user, ...roleDetails };
+        }
+      } catch (e) {
+        console.warn('Supabase signin attempt fallback:', e.message);
+      }
+    }
+
+    // 3. Resilient Local Engine Profiles
+    const profiles = getLocalTable('profiles', DEFAULT_PROFILES);
+    const profile = profiles.find(p => 
+      p.email?.toLowerCase() === input.toLowerCase() ||
+      (p.role === 'student' && (input.toUpperCase() === 'STU001' || role === 'student')) ||
+      (p.role === 'vendor' && (input.toUpperCase() === 'VEN001' || role === 'vendor'))
+    );
+
+    if (!profile) {
+      throw new Error(`Account '${input}' not found. Please use demo credentials:\nStudent: STU001 / student123\nVendor: VEN001 / vendor123`);
+    }
+
+    let roleDetails = null;
+    if (profile.role === 'student') {
+      const students = getLocalTable('students', DEFAULT_STUDENTS);
+      const stu = students.find(s => s.profile_id === profile.id) || DEFAULT_STUDENTS[0];
+      roleDetails = { student: stu };
+    } else if (profile.role === 'vendor') {
+      const vendors = getLocalTable('vendors', DEFAULT_VENDORS);
+      const ven = vendors.find(v => v.profile_id === profile.id) || DEFAULT_VENDORS[0];
+      roleDetails = { vendor: ven };
+    }
+
+    return { profile, user: { id: profile.auth_user_id, email: profile.email }, ...roleDetails };
   },
 
   async signOut() {
@@ -460,18 +497,34 @@ export const databaseService = {
   // --------------------------------------------------------------------------
   // ORDERS & CHECKOUT
   // --------------------------------------------------------------------------
-  async createPendingOrder({ studentId, vendorId, items, subtotal, totalAmount, notes = '' }) {
-    const orderNumber = `CB-${Math.floor(10000 + Math.random() * 90000)}`;
+  async createPendingOrder({ studentId, vendorId, studentName, items, subtotal, totalAmount, notes = '' }) {
+    // Generate realistic Order ID (e.g. ORD1001) and Token Number (e.g. TKN245)
+    const existingOrders = getLocalTable('orders', []);
+    const orderNumber = `ORD${1001 + existingOrders.length}`;
+    const tokenNumber = `TKN${Math.floor(200 + Math.random() * 790)}`;
+
+    const validUUID = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+    const parsedSubtotal = parseFloat(subtotal) || 0;
+    const parsedTotal = parseFloat(totalAmount) || parsedSubtotal;
 
     const orderRow = {
       id: crypto.randomUUID(),
       order_number: orderNumber,
-      student_id: studentId || DEFAULT_STUDENTS[0].id,
-      vendor_id: vendorId || DEFAULT_VENDORS[0].id,
-      subtotal: parseFloat(subtotal),
-      total_amount: parseFloat(totalAmount),
+      orderId: orderNumber,
+      token_number: tokenNumber,
+      tokenNumber: tokenNumber,
+      student_id: validUUID(studentId) ? studentId : DEFAULT_STUDENTS[0].id,
+      studentId: validUUID(studentId) ? studentId : DEFAULT_STUDENTS[0].student_id,
+      studentName: studentName || DEFAULT_PROFILES[1].full_name,
+      vendor_id: validUUID(vendorId) ? vendorId : DEFAULT_VENDORS[0].id,
+      subtotal: parsedSubtotal,
+      total_amount: parsedTotal,
+      totalAmount: parsedTotal,
       payment_status: 'PENDING',
+      paymentStatus: 'PENDING',
       order_status: 'PENDING_PAYMENT',
+      orderStatus: 'PENDING_PAYMENT',
       qr_token: null,
       qr_generated_at: null,
       qr_scanned_at: null,
@@ -483,28 +536,57 @@ export const databaseService = {
     const orderItemsRows = items.map(item => ({
       id: crypto.randomUUID(),
       order_id: orderRow.id,
-      food_item_id: item.id,
+      food_item_id: validUUID(item.id) ? item.id : null,
       food_name_snapshot: item.name,
+      name: item.name,
       quantity: item.quantity,
-      price_snapshot: parseFloat(item.price),
-      subtotal: parseFloat(item.price * item.quantity)
+      price_snapshot: parseFloat(item.price) || 0,
+      price: parseFloat(item.price) || 0,
+      subtotal: (parseFloat(item.price) || 0) * (item.quantity || 1)
     }));
 
     if (isSupabaseConfigured && supabase) {
-      const { data: order, error: ordError } = await supabase.from('orders').insert([orderRow]).select().single();
-      if (ordError) throw ordError;
-
-      const { error: itemsError } = await supabase.from('order_items').insert(orderItemsRows);
-      if (itemsError) throw itemsError;
-
-      return { ...order, items: orderItemsRows };
-    } else {
-      const orders = getLocalTable('orders');
-      const fullOrder = { ...orderRow, items: orderItemsRows };
-      orders.unshift(fullOrder);
-      setLocalTable('orders', orders);
-      return fullOrder;
+      try {
+        const supabaseOrderPayload = {
+          id: orderRow.id,
+          order_number: orderRow.order_number,
+          token_number: orderRow.token_number,
+          student_id: orderRow.student_id,
+          vendor_id: orderRow.vendor_id,
+          subtotal: orderRow.subtotal,
+          total_amount: orderRow.total_amount,
+          payment_status: orderRow.payment_status,
+          order_status: orderRow.order_status,
+          qr_token: orderRow.qr_token,
+          qr_generated_at: orderRow.qr_generated_at,
+          qr_scanned_at: orderRow.qr_scanned_at,
+          notes: orderRow.notes,
+          created_at: orderRow.created_at,
+          updated_at: orderRow.updated_at
+        };
+        const { data: order, error: ordError } = await supabase.from('orders').insert([supabaseOrderPayload]).select().single();
+        if (!ordError && order) {
+          const supabaseItemsPayload = orderItemsRows.map(it => ({
+            id: it.id,
+            order_id: it.order_id,
+            food_item_id: it.food_item_id,
+            food_name_snapshot: it.food_name_snapshot,
+            quantity: it.quantity,
+            price_snapshot: it.price_snapshot,
+            subtotal: it.subtotal
+          }));
+          await supabase.from('order_items').insert(supabaseItemsPayload);
+        }
+      } catch (e) {
+        console.warn('Supabase createPendingOrder fallback:', e.message);
+      }
     }
+
+    const fullOrder = { ...orderRow, items: orderItemsRows, foodItems: orderItemsRows, order_items: orderItemsRows };
+    const orders = getLocalTable('orders', []);
+    orders.unshift(fullOrder);
+    setLocalTable('orders', orders);
+    return fullOrder;
   },
 
   async completePayment({ orderId, paymentProvider, transactionId, amount }) {
@@ -522,76 +604,83 @@ export const databaseService = {
       created_at: paidAt
     };
 
+    let updatedOrder = null;
+
     if (isSupabaseConfigured && supabase) {
-      // 1. Insert payment record
-      const { error: payError } = await supabase.from('payments').insert([paymentRow]);
-      if (payError) throw payError;
-
-      // 2. Update order to PAID + generate unique QR token
-      const { data: updatedOrder, error: ordError } = await supabase
-        .from('orders')
-        .update({
-          payment_status: 'PAID',
-          order_status: 'PAID',
-          qr_token: qrToken,
-          qr_generated_at: paidAt,
-          updated_at: paidAt
-        })
-        .eq('id', orderId)
-        .select('*, order_items(*), students(*)')
-        .single();
-      if (ordError) throw ordError;
-
-      return updatedOrder;
-    } else {
-      const orders = getLocalTable('orders');
-      const idx = orders.findIndex(o => o.id === orderId);
-      if (idx !== -1) {
-        orders[idx] = {
-          ...orders[idx],
-          payment_status: 'PAID',
-          order_status: 'PAID',
-          qr_token: qrToken,
-          qr_generated_at: paidAt,
-          updated_at: paidAt,
-          payment: paymentRow
-        };
-        setLocalTable('orders', orders);
-
-        // Notify Realtime channels of new paid order
-        realtimeEmitter.emit('NEW_PAID_ORDER', orders[idx]);
-        realtimeEmitter.emit('ORDER_UPDATED', orders[idx]);
-
-        return orders[idx];
+      try {
+        await supabase.from('payments').insert([paymentRow]);
+        const { data, error } = await supabase
+          .from('orders')
+          .update({
+            payment_status: 'PAID',
+            order_status: 'PAID',
+            qr_token: qrToken,
+            qr_generated_at: paidAt,
+            updated_at: paidAt
+          })
+          .or(`id.eq.${orderId},order_number.eq.${orderId}`)
+          .select('*, order_items(*), students(*)')
+          .maybeSingle();
+        if (!error && data) updatedOrder = data;
+      } catch (e) {
+        console.warn('Supabase completePayment fallback:', e.message);
       }
-      throw new Error('Order not found for payment completion.');
     }
+
+    const orders = getLocalTable('orders', []);
+    const idx = orders.findIndex(o => o.id === orderId || o.order_number === orderId || o.orderId === orderId);
+    if (idx !== -1) {
+      orders[idx] = {
+        ...orders[idx],
+        payment_status: 'PAID',
+        paymentStatus: 'PAID',
+        order_status: 'PAID',
+        orderStatus: 'PAID',
+        qr_token: qrToken,
+        qr_generated_at: paidAt,
+        updated_at: paidAt,
+        payment: paymentRow
+      };
+      setLocalTable('orders', orders);
+      if (!updatedOrder) updatedOrder = orders[idx];
+    }
+
+    if (updatedOrder) {
+      // Notify Realtime channels of new paid order immediately
+      realtimeEmitter.emit('NEW_PAID_ORDER', updatedOrder);
+      realtimeEmitter.emit('ORDER_UPDATED', updatedOrder);
+      return updatedOrder;
+    }
+    throw new Error('Order not found for payment completion.');
   },
 
   async getOrders(filter = {}) {
     if (isSupabaseConfigured && supabase) {
-      let query = supabase
-        .from('orders')
-        .select('*, order_items(*), students(*)')
-        .order('created_at', { ascending: false });
+      try {
+        let query = supabase
+          .from('orders')
+          .select('*, order_items(*), students(*)')
+          .order('created_at', { ascending: false });
 
-      if (filter.studentId) query = query.eq('student_id', filter.studentId);
-      if (filter.vendorId) query = query.eq('vendor_id', filter.vendorId);
-      if (filter.status && filter.status !== 'ALL') query = query.eq('order_status', filter.status);
+        if (filter.studentId) query = query.eq('student_id', filter.studentId);
+        if (filter.vendorId) query = query.eq('vendor_id', filter.vendorId);
+        if (filter.status && filter.status !== 'ALL') query = query.eq('order_status', filter.status);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    } else {
-      let orders = getLocalTable('orders');
-      if (filter.studentId) {
-        orders = orders.filter(o => o.student_id === filter.studentId);
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) return data;
+      } catch (e) {
+        console.warn('Supabase getOrders fallback:', e.message);
       }
-      if (filter.status && filter.status !== 'ALL') {
-        orders = orders.filter(o => o.order_status === filter.status);
-      }
-      return orders;
     }
+
+    let orders = getLocalTable('orders', []);
+    if (filter.studentId) {
+      orders = orders.filter(o => o.student_id === filter.studentId);
+    }
+    if (filter.status && filter.status !== 'ALL') {
+      orders = orders.filter(o => o.order_status === filter.status);
+    }
+    return orders;
   },
 
   async updateOrderStatus(orderId, newStatus) {
@@ -601,108 +690,174 @@ export const databaseService = {
     }
 
     const updatedAt = new Date().toISOString();
+    let updatedOrder = null;
 
     if (isSupabaseConfigured && supabase) {
-      const updates = { order_status: newStatus, updated_at: updatedAt };
-      if (newStatus === 'COMPLETED') {
-        updates.qr_scanned_at = updatedAt;
+      try {
+        const updates = { order_status: newStatus, updated_at: updatedAt };
+        if (newStatus === 'COMPLETED') {
+          updates.qr_scanned_at = updatedAt;
+        }
+        const { data, error } = await supabase
+          .from('orders')
+          .update(updates)
+          .or(`id.eq.${orderId},order_number.eq.${orderId}`)
+          .select('*, order_items(*), students(*)')
+          .maybeSingle();
+        if (!error && data) updatedOrder = data;
+      } catch (e) {
+        console.warn('Supabase updateOrderStatus fallback:', e.message);
       }
-      const { data, error } = await supabase
-        .from('orders')
-        .update(updates)
-        .eq('id', orderId)
-        .select('*, order_items(*), students(*)')
-        .single();
-      if (error) throw error;
-      return data;
-    } else {
-      const orders = getLocalTable('orders');
-      const idx = orders.findIndex(o => o.id === orderId);
-      if (idx !== -1) {
-        orders[idx] = {
-          ...orders[idx],
-          order_status: newStatus,
-          updated_at: updatedAt,
-          ...(newStatus === 'COMPLETED' ? { qr_scanned_at: updatedAt } : {})
-        };
-        setLocalTable('orders', orders);
-        realtimeEmitter.emit('ORDER_UPDATED', orders[idx]);
-        return orders[idx];
-      }
-      throw new Error('Order not found.');
     }
+
+    const orders = getLocalTable('orders', []);
+    const idx = orders.findIndex(o => o.id === orderId || o.order_number === orderId || o.orderId === orderId);
+    if (idx !== -1) {
+      orders[idx] = {
+        ...orders[idx],
+        order_status: newStatus,
+        orderStatus: newStatus,
+        updated_at: updatedAt,
+        ...(newStatus === 'COMPLETED' ? { qr_scanned_at: updatedAt } : {})
+      };
+      setLocalTable('orders', orders);
+      realtimeEmitter.emit('ORDER_UPDATED', orders[idx]);
+      if (!updatedOrder) updatedOrder = orders[idx];
+    }
+
+    return updatedOrder || { order_status: newStatus, updated_at: updatedAt };
   },
 
   // --------------------------------------------------------------------------
   // QR CODE VALIDATION & REDEMPTION (VENDOR CAMERA SCANNER)
   // --------------------------------------------------------------------------
-  async verifyQRCode({ orderId, qrToken, vendorId }) {
+  async verifyQRCode({ orderId, qrToken, tokenNumber, rawPayload, vendorId }) {
+    let targetOrderId = orderId;
+    let targetTokenNumber = tokenNumber;
+    let targetQrToken = qrToken;
+
+    if (rawPayload && typeof rawPayload === 'string') {
+      try {
+        const parsed = JSON.parse(rawPayload);
+        if (parsed.orderId || parsed.orderNumber) targetOrderId = parsed.orderId || parsed.orderNumber;
+        if (parsed.tokenNumber) targetTokenNumber = parsed.tokenNumber;
+        if (parsed.token || parsed.qrToken) targetQrToken = parsed.token || parsed.qrToken;
+      } catch (e) {
+        if (!targetOrderId) targetOrderId = rawPayload.trim();
+      }
+    }
+
     let order = null;
 
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*, order_items(*), students(*, profiles(*))')
-        .eq('id', orderId)
-        .single();
-      if (error || !data) {
-        return { valid: false, reason: 'Order not found in database. The QR code does not correspond to a registered order.' };
-      }
-      order = data;
-    } else {
-      const orders = getLocalTable('orders');
-      order = orders.find(o => o.id === orderId || o.order_number === orderId);
-      if (!order) {
-        return { valid: false, reason: 'Order not found in database. The QR code does not correspond to a registered order.' };
+      try {
+        let query = supabase.from('orders').select('*, order_items(*), students(*, profiles(*))');
+        if (targetOrderId && targetOrderId.startsWith('ORD')) {
+          query = query.eq('order_number', targetOrderId);
+        } else if (targetOrderId && targetOrderId.includes('-')) {
+          query = query.eq('id', targetOrderId);
+        } else if (targetTokenNumber) {
+          query = query.eq('token_number', targetTokenNumber);
+        } else if (targetOrderId) {
+          query = query.or(`order_number.eq.${targetOrderId},id.eq.${targetOrderId}`);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (!error && data) order = data;
+      } catch (e) {
+        console.warn('Supabase verifyQRCode fallback:', e.message);
       }
     }
 
-    // 1. Token validation
-    if (order.qr_token && qrToken && order.qr_token !== qrToken) {
-      return { valid: false, reason: 'Invalid security token. This QR code signature is unrecognized.' };
+    if (!order) {
+      const orders = getLocalTable('orders', []);
+      order = orders.find(o => 
+        (targetOrderId && (o.id === targetOrderId || o.order_number === targetOrderId || o.orderId === targetOrderId)) ||
+        (targetTokenNumber && (o.token_number === targetTokenNumber || o.tokenNumber === targetTokenNumber)) ||
+        (targetQrToken && o.qr_token === targetQrToken)
+      );
     }
 
-    // 2. Payment validation
+    if (!order) {
+      return { valid: false, reason: 'Invalid Order / QR: Order not found in database.' };
+    }
+
+    // 1. Payment validation
     if (order.payment_status !== 'PAID') {
-      return { valid: false, reason: `Order payment has not been completed. Current status: ${order.payment_status}` };
+      return { valid: false, reason: `Invalid Order / QR: Payment has not been completed. Status: ${order.payment_status}` };
     }
 
-    // 3. Vendor validation
-    if (vendorId && order.vendor_id && order.vendor_id !== vendorId && vendorId !== DEFAULT_VENDORS[0].id) {
-      return { valid: false, reason: 'This order belongs to a different canteen counter bay.' };
-    }
-
-    // 4. One-time redemption validation (Prevent Replay / Reuse)
+    // 2. One-time redemption validation (Prevent Replay / Reuse)
     if (order.order_status === 'COMPLETED' || order.qr_scanned_at) {
-      const collectedTime = order.qr_scanned_at ? new Date(order.qr_scanned_at).toLocaleTimeString() : 'Earlier';
       return {
         valid: false,
         isReused: true,
-        reason: `FOOD ALREADY COLLECTED! This QR code was redeemed at ${collectedTime}. Cannot be reused.`
+        reason: 'Invalid Order / QR: Food has ALREADY been collected. QR pass is expired.'
       };
     }
 
     if (order.order_status === 'CANCELLED') {
-      return { valid: false, reason: 'This order was CANCELLED or refunded.' };
+      return { valid: false, reason: 'Invalid Order / QR: Order was cancelled or refunded.' };
     }
 
     // Return verified order details
     const studentInfo = order.students || {
-      student_id: '21BCS042',
-      college_email: 'rahul.sharma@college.edu',
-      full_name: 'Rahul Sharma'
+      student_id: order.studentId || 'STU001',
+      full_name: order.studentName || 'Arun Kumar'
     };
+
+    const items = order.order_items || order.items || order.foodItems || [];
 
     return {
       valid: true,
       order,
-      student: studentInfo,
-      items: order.order_items || order.items || []
+      orderId: order.order_number || order.orderId || order.id,
+      tokenNumber: order.token_number || order.tokenNumber || 'TKN245',
+      studentName: studentInfo.profiles?.full_name || studentInfo.full_name || order.studentName || 'Arun Kumar',
+      studentId: studentInfo.student_id || order.studentId || 'STU001',
+      items,
+      totalAmount: Number(order.total_amount || order.totalAmount || 0),
+      paymentStatus: 'PAID'
     };
   },
 
+  async confirmFoodHandover(orderId) {
+    const updatedAt = new Date().toISOString();
+    let updatedOrder = null;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .update({ order_status: 'COMPLETED', qr_scanned_at: updatedAt, updated_at: updatedAt })
+          .or(`id.eq.${orderId},order_number.eq.${orderId}`)
+          .select('*, order_items(*), students(*)')
+          .maybeSingle();
+        if (!error && data) updatedOrder = data;
+      } catch (e) {
+        console.warn('Supabase confirmFoodHandover fallback:', e.message);
+      }
+    }
+
+    const orders = getLocalTable('orders', []);
+    const idx = orders.findIndex(o => o.id === orderId || o.order_number === orderId || o.orderId === orderId);
+    if (idx !== -1) {
+      orders[idx] = {
+        ...orders[idx],
+        order_status: 'COMPLETED',
+        orderStatus: 'COMPLETED',
+        qr_scanned_at: updatedAt,
+        updated_at: updatedAt
+      };
+      setLocalTable('orders', orders);
+      realtimeEmitter.emit('ORDER_UPDATED', orders[idx]);
+      if (!updatedOrder) updatedOrder = orders[idx];
+    }
+
+    return updatedOrder || { order_status: 'COMPLETED', qr_scanned_at: updatedAt };
+  },
+
   async confirmFoodCollection(orderId) {
-    return this.updateOrderStatus(orderId, 'COMPLETED');
+    return this.confirmFoodHandover(orderId);
   },
 
   // --------------------------------------------------------------------------

@@ -2,18 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Camera,
   QrCode,
-  ShieldCheck,
   CheckCircle2,
-  AlertTriangle,
   XCircle,
-  RefreshCw,
-  Sparkles,
   ShoppingBag,
   Clock,
-  ArrowRight,
   User,
   Hash,
-  Check
+  Check,
+  Sparkles,
+  ArrowLeft
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import confetti from 'canvas-confetti';
@@ -22,19 +19,22 @@ import { databaseService } from '../lib/databaseService.js';
 import { playSuccessChime } from '../utils/audioAlert.js';
 
 export default function VendorQRScanner() {
-  const { orders, vendorUser, addNotification, refreshOrders } = useCampus();
+  const { orders, vendorUser, addNotification, refreshOrders, setVendorTab } = useCampus();
 
   const [scannerActive, setScannerActive] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [verifying, setVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState(null); // { valid, reason, isReused, order, student, items }
+  const [verificationResult, setVerificationResult] = useState(null); // { valid, reason, isReused, order, studentName, studentId, orderId, tokenNumber, items, totalAmount, paymentStatus }
   const [completedSuccess, setCompletedSuccess] = useState(false);
   const [manualCodeInput, setManualCodeInput] = useState('');
 
   const html5QrCodeRef = useRef(null);
 
-  // Ready orders available for quick testing
-  const readyOrders = orders.filter(o => o.order_status === 'READY' || o.order_status === 'PAID' || o.order_status === 'ACCEPTED');
+  // Active paid orders available for quick testing simulation
+  const activePaidOrders = (orders || []).filter(o => 
+    (o.payment_status === 'PAID' || o.paymentStatus === 'PAID') &&
+    (o.order_status !== 'COMPLETED' && o.orderStatus !== 'COMPLETED')
+  );
 
   const startCamera = async () => {
     setCameraError('');
@@ -55,11 +55,10 @@ export default function VendorQRScanner() {
         { facingMode: 'environment' },
         config,
         async (decodedText) => {
-          // Pause/stop scanner once detected
           stopCamera();
           handleScannedData(decodedText);
         },
-        (errorMessage) => {
+        () => {
           // ignore frame scan errors
         }
       );
@@ -67,7 +66,7 @@ export default function VendorQRScanner() {
       setScannerActive(true);
     } catch (err) {
       console.warn('Camera initiation failed or permission denied:', err);
-      setCameraError(err.message || 'Camera access not granted or no webcam detected. You can use manual code validation or instant test buttons below.');
+      setCameraError(err.message || 'Camera access not granted or no webcam detected. You can test using the quick scan buttons or manual entry below.');
       setScannerActive(false);
     }
   };
@@ -84,6 +83,8 @@ export default function VendorQRScanner() {
   };
 
   useEffect(() => {
+    // Attempt camera auto-start if possible
+    startCamera();
     return () => {
       stopCamera();
     };
@@ -95,22 +96,8 @@ export default function VendorQRScanner() {
     setCompletedSuccess(false);
 
     try {
-      let orderId = '';
-      let qrToken = '';
-
-      // Check if JSON payload
-      try {
-        const parsed = JSON.parse(rawContent);
-        orderId = parsed.orderId || parsed.orderNumber || '';
-        qrToken = parsed.token || parsed.qrToken || '';
-      } catch (e) {
-        // Plain text token or order number
-        orderId = rawContent.trim();
-      }
-
       const result = await databaseService.verifyQRCode({
-        orderId,
-        qrToken,
+        rawPayload: rawContent,
         vendorId: vendorUser?.id
       });
 
@@ -118,49 +105,54 @@ export default function VendorQRScanner() {
     } catch (err) {
       setVerificationResult({
         valid: false,
-        reason: err.message || 'Verification failed unexpectedly.'
+        reason: 'Invalid Order / QR: ' + (err.message || 'Verification failed')
       });
     } finally {
       setVerifying(false);
     }
   };
 
-  const handleConfirmCollection = async () => {
-    if (!verificationResult?.order?.id) return;
+  const handleConfirmHandover = async () => {
+    const targetId = verificationResult?.order?.id || verificationResult?.orderId;
+    if (!targetId) return;
+
     setVerifying(true);
 
     try {
-      await databaseService.confirmFoodCollection(verificationResult.order.id);
+      await databaseService.confirmFoodHandover(targetId);
 
       playSuccessChime();
       confetti({
-        particleCount: 90,
+        particleCount: 100,
         spread: 80,
         origin: { y: 0.6 }
       });
 
       addNotification({
         targetRole: 'student',
-        title: 'Food Collected Successfully! 🍽️',
-        message: `Your order #${verificationResult.order.order_number} has been verified and picked up at Counter Bay. Enjoy your meal!`,
+        title: 'Food Handed Over Successfully! 🍽️',
+        message: `Your order #${verificationResult?.orderId} has been delivered. Enjoy your meal!`,
         type: 'collected'
       });
 
       setCompletedSuccess(true);
       if (refreshOrders) refreshOrders();
     } catch (err) {
-      alert('Failed to complete collection: ' + err.message);
+      alert('Failed to confirm handover: ' + err.message);
     } finally {
       setVerifying(false);
     }
   };
 
-  const handleSimulateScanOrder = (order) => {
+  const handleSimulateScanOrder = (ord) => {
     const payload = JSON.stringify({
-      orderId: order.id,
-      orderNumber: order.order_number,
-      token: order.qr_token || 'demo-token',
-      vendorId: order.vendor_id
+      orderId: ord.order_number || ord.orderId || ord.id,
+      orderNumber: ord.order_number || ord.orderId || ord.id,
+      tokenNumber: ord.token_number || ord.tokenNumber || 'TKN245',
+      studentName: ord.students?.profiles?.full_name || ord.studentName || 'Arun Kumar',
+      studentId: ord.students?.student_id || ord.studentId || 'STU001',
+      token: ord.qr_token || 'SEC-TOK-DEMO',
+      amount: Number(ord.total_amount || ord.totalAmount || 0)
     });
     handleScannedData(payload);
   };
@@ -172,23 +164,27 @@ export default function VendorQRScanner() {
   };
 
   return (
-    <div className="space-y-4 pb-20">
-      {/* Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
-        <div className="flex items-center space-x-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-            <Camera className="w-5 h-5" />
-          </div>
+    <div className="max-w-md mx-auto space-y-4 pb-24 px-4 text-white animate-fadeIn">
+      {/* Top Header */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 flex items-center justify-between shadow-xl">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setVendorTab('dashboard')}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+            title="Back to Dashboard"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
           <div>
-            <h1 className="text-lg font-bold text-white">Counter QR Code Scanner</h1>
-            <p className="text-xs text-slate-400">Scan student pass to verify payment and complete order</p>
+            <h1 className="text-base font-bold text-white">Vendor QR Scanner</h1>
+            <p className="text-[11px] text-slate-400">Scan student pass to verify payment and hand over food</p>
           </div>
         </div>
       </div>
 
       {/* Camera Viewfinder Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden p-4 sm:p-5">
-        <div className="relative w-full aspect-square max-w-sm mx-auto bg-slate-950 rounded-2xl border-2 border-dashed border-slate-700 flex flex-col items-center justify-center overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 space-y-3 shadow-xl">
+        <div className="relative w-full aspect-square max-w-sm mx-auto bg-slate-950 rounded-2xl border-2 border-dashed border-indigo-500/50 flex flex-col items-center justify-center overflow-hidden">
           {/* HTML5 QR Container */}
           <div
             id="qr-reader-container"
@@ -196,21 +192,21 @@ export default function VendorQRScanner() {
           />
 
           {!scannerActive && (
-            <div className="text-center p-6 space-y-4">
-              <div className="w-16 h-16 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center mx-auto text-indigo-400 shadow-inner">
+            <div className="text-center p-6 space-y-3">
+              <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400 shadow-inner">
                 <QrCode className="w-8 h-8" />
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-white">Live Camera Scanner</p>
+                <p className="text-sm font-bold text-white">Camera Viewfinder</p>
                 <p className="text-xs text-slate-400 max-w-xs">
-                  Point camera at student's CampusBite QR pass to authenticate order and unlock food pickup.
+                  Point camera at the student's CampusBite QR pass to verify order.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={startCamera}
-                className="py-2.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 mx-auto"
+                className="py-2.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 mx-auto"
               >
                 <Camera className="w-4 h-4" />
                 <span>Open Camera & Scan</span>
@@ -223,7 +219,7 @@ export default function VendorQRScanner() {
               <button
                 type="button"
                 onClick={stopCamera}
-                className="py-2 px-4 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-semibold backdrop-blur-sm border border-slate-700 transition-colors"
+                className="py-2 px-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-xs font-semibold backdrop-blur-sm border border-slate-700 transition"
               >
                 Close Camera
               </button>
@@ -232,61 +228,57 @@ export default function VendorQRScanner() {
         </div>
 
         {cameraError && (
-          <div className="mt-3 p-3 rounded-xl bg-amber-950/40 border border-amber-800 text-amber-300 text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-400" />
-            <span>{cameraError}</span>
+          <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/80 text-amber-300 text-xs flex items-center gap-2">
+            <span>📷 {cameraError}</span>
           </div>
         )}
       </div>
 
-      {/* VERIFICATION RESULTS CARD */}
+      {/* VERIFYING SPINNER */}
       {verifying && (
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-3 animate-pulse">
+        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-3 animate-pulse shadow-xl">
           <div className="w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-xs font-semibold text-slate-300">Validating QR token with Supabase database...</p>
+          <p className="text-xs font-bold text-slate-300">Validating order with Supabase database...</p>
         </div>
       )}
 
-      {/* VERIFIED: SUCCESSFUL MATCH */}
+      {/* 1. SUCCESSFUL VERIFICATION CARD */}
       {verificationResult && verificationResult.valid && !completedSuccess && (
-        <div className="bg-emerald-950/40 border-2 border-emerald-500 rounded-2xl p-5 space-y-4 animate-scaleUp text-slate-100">
-          <div className="flex items-center justify-between border-b border-emerald-800/50 pb-3">
-            <div className="flex items-center space-x-2 text-emerald-400 font-bold text-base">
+        <div className="bg-emerald-950/40 border-2 border-emerald-500 rounded-3xl p-5 space-y-4 shadow-2xl animate-scaleUp text-slate-100">
+          <div className="flex items-center justify-between border-b border-emerald-800/60 pb-3">
+            <div className="flex items-center space-x-2 text-emerald-400 font-black text-base">
               <CheckCircle2 className="w-5 h-5" />
-              <span>ORDER VERIFIED & VALID</span>
+              <span>✓ ORDER VERIFIED</span>
             </div>
-            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-semibold">
-              #{verificationResult.order.order_number}
+            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+              #{verificationResult.orderId}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
-              <span className="text-slate-400 flex items-center gap-1">
-                <User className="w-3 h-3 text-emerald-400" /> Student:
-              </span>
-              <p className="font-bold text-slate-100">{verificationResult.student?.full_name || 'Rahul Sharma'}</p>
-              <p className="font-mono text-[11px] text-slate-400">{verificationResult.student?.student_id || '21BCS042'}</p>
+          {/* Student & Order Details */}
+          <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+            <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-0.5">
+              <span className="text-[10px] text-slate-400 font-sans uppercase font-semibold block">Student Name</span>
+              <p className="font-bold text-white font-sans text-sm">{verificationResult.studentName}</p>
+              <p className="text-slate-400 text-[11px]">ID: {verificationResult.studentId}</p>
             </div>
 
-            <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
-              <span className="text-slate-400 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" /> Payment:
-              </span>
-              <p className="font-bold text-emerald-400">₹{Number(verificationResult.order.total_amount).toFixed(2)}</p>
-              <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">
-                PAID & VERIFIED
-              </span>
+            <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-0.5">
+              <span className="text-[10px] text-slate-400 font-sans uppercase font-semibold block">Token Number</span>
+              <p className="font-black text-emerald-400 text-base">{verificationResult.tokenNumber}</p>
+              <p className="text-[11px] text-emerald-400 font-sans font-bold">Status: PAID ✓</p>
             </div>
           </div>
 
-          {/* Items Checklist */}
+          {/* Food Ordered & Quantity */}
           <div className="space-y-1.5">
-            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" /> Items for Collection:
+            <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Food Ordered & Quantity:</span>
             </span>
-            <div className="divide-y divide-slate-800 bg-slate-900/80 rounded-xl border border-slate-800 p-2.5">
-              {verificationResult.items.map((item, idx) => (
+
+            <div className="divide-y divide-slate-800 bg-slate-950/80 rounded-2xl border border-slate-800 p-3">
+              {(verificationResult.items || []).map((item, idx) => (
                 <div key={idx} className="py-1.5 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center text-[11px]">
@@ -294,118 +286,142 @@ export default function VendorQRScanner() {
                     </span>
                     <span className="text-slate-200 font-medium">{item.food_name_snapshot || item.name}</span>
                   </div>
-                  <span className="text-slate-400">₹{Number(item.price_snapshot || item.price) * item.quantity}</span>
+                  <span className="font-mono text-slate-400">
+                    ₹{(Number(item.price_snapshot || item.price || 0) * item.quantity).toFixed(2)}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Collection Button */}
+          {/* Total Amount & Payment Status */}
+          <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+            <span className="text-slate-300 font-bold">Total Amount:</span>
+            <span className="text-amber-400 font-black font-mono text-base">
+              ₹{Number(verificationResult.totalAmount || 0).toFixed(2)}
+            </span>
+          </div>
+
+          {/* CONFIRM FOOD HANDOVER BUTTON */}
           <button
-            onClick={handleConfirmCollection}
+            onClick={handleConfirmHandover}
             disabled={verifying}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-sm shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+            className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/30 transition flex items-center justify-center gap-2 active:scale-98"
           >
-            <Check className="w-5 h-5" />
-            <span>CONFIRM FOOD COLLECTION & DELIVER</span>
+            <Check className="w-5 h-5 text-slate-950 stroke-[3]" />
+            <span>CONFIRM FOOD HANDOVER</span>
           </button>
         </div>
       )}
 
-      {/* COMPLETED SUCCESS SCREEN */}
+      {/* 2. HANDOVER COMPLETED MESSAGE */}
       {completedSuccess && (
-        <div className="p-6 rounded-2xl bg-emerald-950/60 border-2 border-emerald-500 text-center space-y-3 animate-scaleUp">
-          <div className="w-14 h-14 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center mx-auto text-emerald-400">
-            <Check className="w-7 h-7" />
+        <div className="p-6 rounded-3xl bg-emerald-950/60 border-2 border-emerald-500 text-center space-y-3 shadow-2xl animate-scaleUp">
+          <div className="w-14 h-14 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center mx-auto text-emerald-400 shadow-lg shadow-emerald-500/20">
+            <Check className="w-7 h-7 stroke-[3]" />
           </div>
-          <h3 className="text-base font-bold text-white">Food Handed Over & Completed!</h3>
+          <h3 className="text-lg font-black text-white">Food handed over successfully ✓</h3>
           <p className="text-xs text-slate-300 max-w-sm mx-auto">
-            Order #{verificationResult?.order?.order_number} marked as COMPLETED. This QR pass is now permanently retired and cannot be reused.
+            Order #{verificationResult?.orderId} (Token: {verificationResult?.tokenNumber}) status is now <strong>COMPLETED</strong>. This QR code / Token is marked as <strong>USED</strong> and cannot be reused.
           </p>
-          <button
-            onClick={() => {
-              setVerificationResult(null);
-              setCompletedSuccess(false);
-            }}
-            className="py-2 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
-          >
-            Scan Next Order
-          </button>
+          <div className="pt-2">
+            <button
+              onClick={() => {
+                setVerificationResult(null);
+                setCompletedSuccess(false);
+                setVendorTab('dashboard');
+              }}
+              className="py-2.5 px-6 rounded-xl bg-slate-800 hover:bg-slate-750 text-white text-xs font-bold transition border border-slate-700"
+            >
+              Return to Vendor Dashboard
+            </button>
+          </div>
         </div>
       )}
 
-      {/* REJECTED / INVALID QR */}
+      {/* 3. INVALID OR ALREADY USED QR CARD */}
       {verificationResult && !verificationResult.valid && (
-        <div className="p-5 rounded-2xl bg-rose-950/40 border-2 border-rose-600 text-slate-100 space-y-3 animate-shake">
-          <div className="flex items-center space-x-2 text-rose-400 font-bold text-base">
+        <div className="p-5 rounded-3xl bg-rose-950/50 border-2 border-rose-600 text-slate-100 space-y-3 shadow-2xl animate-shake">
+          <div className="flex items-center space-x-2 text-rose-400 font-black text-base">
             <XCircle className="w-5 h-5" />
-            <span>INVALID OR REJECTED QR CODE</span>
+            <span>Invalid Order / QR</span>
           </div>
-          <p className="text-xs text-rose-200 leading-relaxed bg-rose-950/80 p-3 rounded-xl border border-rose-800">
-            {verificationResult.reason}
+          <p className="text-xs text-rose-200 leading-relaxed bg-rose-950/80 p-3 rounded-2xl border border-rose-800 font-mono">
+            {verificationResult.reason || 'Invalid Order / QR'}
           </p>
           {verificationResult.isReused && (
-            <div className="text-[11px] text-amber-300 font-medium">
-              ⚠️ Warning: Anti-fraud protection triggered. Orders cannot be redeemed multiple times.
+            <div className="text-[11px] text-amber-300 font-semibold bg-amber-950/40 p-2.5 rounded-xl border border-amber-800">
+              ⚠️ Anti-fraud Protection: This token has already been redeemed and cannot be reused.
             </div>
           )}
           <button
             onClick={() => setVerificationResult(null)}
-            className="w-full py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+            className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-bold transition"
           >
-            Dismiss & Try Again
+            Scan Another QR
           </button>
         </div>
       )}
 
-      {/* Manual Token Entry Form */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-          <Hash className="w-3.5 h-3.5 text-indigo-400" /> Manual Token or Order # Verification:
+      {/* Manual Input Form */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 space-y-2.5">
+        <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+          <Hash className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Manual Order ID or Token Verification:</span>
         </h3>
         <form onSubmit={handleManualSubmit} className="flex gap-2">
           <input
             type="text"
-            placeholder="Enter Order # (e.g. CB-8491) or QR Token"
+            placeholder="e.g. ORD1001 or TKN245"
             value={manualCodeInput}
             onChange={(e) => setManualCodeInput(e.target.value)}
-            className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+            className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
           />
           <button
             type="submit"
-            className="py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors"
+            className="py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shadow-md shadow-indigo-600/30"
           >
             Verify
           </button>
         </form>
       </div>
 
-      {/* Rapid Test Simulation Bar (For easy viva/testing) */}
-      {readyOrders.length > 0 && (
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-2.5">
+      {/* Quick Test Simulation Bar (For viva & testing without camera) */}
+      {activePaidOrders.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Test Scan Active Ready Orders:
+            <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>1-Click Test Scan Active Paid Orders:</span>
             </span>
-            <span className="text-[10px] text-slate-500">1-click camera simulation</span>
+            <span className="text-[10px] text-slate-500 font-mono">Viva Shortcut</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {readyOrders.slice(0, 3).map((ord) => (
+
+          <div className="grid grid-cols-1 gap-2">
+            {activePaidOrders.slice(0, 3).map((ord) => (
               <button
-                key={ord.id}
+                key={ord.id || ord.order_number}
                 type="button"
                 onClick={() => handleSimulateScanOrder(ord)}
-                className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 text-left transition-all group"
+                className="p-3 rounded-2xl bg-slate-950 border border-slate-800 hover:border-indigo-500 text-left transition group flex items-center justify-between"
               >
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-bold text-white group-hover:text-indigo-400">#{ord.order_number}</span>
-                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                    {ord.order_status}
-                  </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white font-mono text-xs group-hover:text-indigo-400">
+                      #{ord.order_number || ord.orderId}
+                    </span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                      {ord.token_number || ord.tokenNumber || 'TKN245'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {ord.students?.full_name || ord.studentName || 'Student'} • ₹{Number(ord.total_amount || ord.totalAmount || 0).toFixed(2)}
+                  </div>
                 </div>
-                <div className="text-[11px] text-slate-400 truncate">
-                  {ord.items?.map(i => `${i.quantity}x ${i.food_name_snapshot || i.name}`).join(', ')}
-                </div>
+
+                <span className="text-xs text-indigo-400 font-bold group-hover:translate-x-0.5 transition">
+                  Test Scan →
+                </span>
               </button>
             ))}
           </div>
@@ -414,5 +430,3 @@ export default function VendorQRScanner() {
     </div>
   );
 }
-
-export { VendorQRScanner };

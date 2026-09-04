@@ -23,6 +23,7 @@ import OrderSuccessModal from './components/OrderSuccessModal';
 import LiveOrderVendorModal from './components/LiveOrderVendorModal';
 import NotificationToaster from './components/NotificationToaster';
 import SplitScreenDemo from './components/SplitScreenDemo';
+import RoleSelectLogin from './components/RoleSelectLogin';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -68,32 +69,15 @@ class ErrorBoundary extends Component {
 function MainView() {
   const { activeRole, studentTab, vendorTab, currentUser, openAuthModal } = useCampus();
 
+  if (!currentUser) {
+    return <RoleSelectLogin />;
+  }
+
   if (activeRole === 'split') {
     return <SplitScreenDemo />;
   }
 
   if (activeRole === 'vendor') {
-    // Role-based protection check
-    if (currentUser?.profile?.role === 'student') {
-      return (
-        <div className="flex-1 w-full max-w-md mx-auto py-12 px-4 text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto text-2xl">
-            🔒
-          </div>
-          <h2 className="text-lg font-bold text-white">Vendor Portal Access Restricted</h2>
-          <p className="text-xs text-slate-400">
-            You are logged in with a Student account. Only registered canteen vendors are authorized to manage kitchen orders and scan customer passes.
-          </p>
-          <button
-            onClick={() => openAuthModal('vendor')}
-            className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition"
-          >
-            Switch / Log In as Vendor
-          </button>
-        </div>
-      );
-    }
-
     return (
       <div className="flex-1 w-full max-w-lg mx-auto py-4">
         {vendorTab === 'dashboard' && <VendorDashboard />}

@@ -19,61 +19,29 @@ import { useCampus } from '../context/CampusContext.jsx';
 import { playSuccessChime } from '../utils/audioAlert.js';
 
 export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }) {
-  const { studentUser, setOrderSuccessModal, setActiveStudentOrder, addNotification } = useCampus();
+  console.log('>>> [PaymentModal] render, isOpen:', isOpen, 'pendingOrder:', pendingOrder);
+  const { studentUser, setOrderSuccessModal, setActiveStudentOrder, addNotification, setStudentTab } = useCampus();
 
-  const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking' | 'wallet'
+  const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'wallet'
   const [upiId, setUpiId] = useState('student@okaxis');
   const [processing, setProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState('');
 
   if (!isOpen || !pendingOrder) return null;
 
-  const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
-  const isRazorpayConfigured = Boolean(razorpayKey && razorpayKey.startsWith('rzp_'));
+  const orderItems = pendingOrder.items || pendingOrder.foodItems || [];
 
   const handleProcessPayment = async () => {
     setProcessing(true);
     setPaymentError('');
 
     try {
-      if (isRazorpayConfigured && typeof window !== 'undefined' && window.Razorpay) {
-        // Real Razorpay Standard Checkout Flow
-        const options = {
-          key: razorpayKey,
-          amount: Math.round(pendingOrder.total_amount * 100), // amount in paise
-          currency: 'INR',
-          name: 'CampusBite Canteen',
-          description: `Pre-Order #${pendingOrder.order_number}`,
-          image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=120&auto=format&fit=crop&q=80',
-          handler: async function (response) {
-            // Secure payment completed callback
-            await completePaymentFlow('Razorpay', response.razorpay_payment_id || `RZP-${Date.now()}`);
-          },
-          prefill: {
-            name: studentUser?.name || 'Student',
-            email: studentUser?.email || 'student@college.edu',
-            contact: studentUser?.phone || '+919876543210'
-          },
-          theme: {
-            color: '#F59E0B'
-          }
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', function (resp) {
-          setPaymentError(resp.error?.description || 'Razorpay transaction was declined.');
-          setProcessing(false);
-        });
-        rzp.open();
-        return;
-      }
-
-      // TEST PAYMENT MODE (Simulates payment authorization while strictly preserving real database updates)
-      await new Promise(resolve => setTimeout(resolve, 1400));
+      // TEST PAYMENT MODE: Instant, reliable simulated payment
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       const providerLabel =
         paymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' :
-        paymentMethod === 'card' ? 'Debit/Credit Card' :
-        paymentMethod === 'wallet' ? 'Campus RFID Dining Wallet' : 'NetBanking';
+        paymentMethod === 'card' ? 'Debit/Credit Card' : 'Campus RFID Wallet';
 
       const txnId = `TXN-${paymentMethod.toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -86,9 +54,9 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
   };
 
   const completePaymentFlow = async (provider, txnId) => {
-    // 1. Update Supabase with verified payment and generate dynamic unique QR token
+    // 1. Update database with verified payment and generate dynamic unique QR token
     const updatedOrder = await databaseService.completePayment({
-      orderId: pendingOrder.id,
+      orderId: pendingOrder.id || pendingOrder.order_number,
       paymentProvider: provider,
       transactionId: txnId,
       amount: pendingOrder.total_amount
@@ -108,25 +76,25 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
     addNotification({
       targetRole: 'student',
       title: 'Payment Successful! 🎉',
-      message: `Order #${updatedOrder.order_number} confirmed. Your secure pickup QR pass is ready.`,
+      message: `Order #${updatedOrder.order_number || updatedOrder.orderId} confirmed. Token #${updatedOrder.token_number || 'TKN245'} ready for pickup.`,
       type: 'paid'
     });
 
-    // 4. Update active order and trigger success modal
+    // 4. Update active order and navigate to QR View
     setActiveStudentOrder(updatedOrder);
+    setOrderSuccessModal(null);
+    setStudentTab('qr');
     setProcessing(false);
     onClose();
 
     if (onPaymentSuccess) {
       onPaymentSuccess(updatedOrder);
     }
-
-    setOrderSuccessModal(updatedOrder);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-slate-100 flex flex-col max-h-[92vh]">
+      <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden text-slate-100 flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-850">
           <div className="flex items-center space-x-3">
@@ -135,9 +103,9 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
             </div>
             <div>
               <h2 className="font-bold text-lg leading-tight text-white flex items-center gap-1.5">
-                Complete Payment
+                Payment Page
               </h2>
-              <p className="text-xs text-slate-400">Order #{pendingOrder.order_number} • 256-Bit Encrypted</p>
+              <p className="text-xs text-slate-400">Order #{pendingOrder.order_number || pendingOrder.orderId}</p>
             </div>
           </div>
           <button
@@ -149,24 +117,38 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
           </button>
         </div>
 
-        {/* Bill Breakdown Header */}
-        <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
-          <div>
-            <div className="text-xs text-slate-400">Total Payable Amount:</div>
-            <div className="text-2xl font-black text-amber-400">₹{pendingOrder.total_amount.toFixed(2)}</div>
+        {/* ORDER SUMMARY (Items, Quantity, Total Amount) */}
+        <div className="p-4 bg-slate-950/90 border-b border-slate-800 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Order Summary</span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+              {orderItems.length} Item(s)
+            </span>
           </div>
 
-          <div className="text-right">
-            <div className="text-xs text-slate-400">{pendingOrder.items?.length || 1} Item(s)</div>
-            {isRazorpayConfigured ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                <ShieldCheck className="w-3 h-3" /> Razorpay Live
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                <Sparkles className="w-3 h-3" /> Test Payment Mode
-              </span>
-            )}
+          <div className="divide-y divide-slate-850 max-h-32 overflow-y-auto pr-1">
+            {orderItems.map((item, idx) => (
+              <div key={idx} className="py-1.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-amber-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                    {item.quantity}×
+                  </span>
+                  <span className="text-slate-200 font-medium truncate max-w-[200px]">
+                    {item.food_name_snapshot || item.name}
+                  </span>
+                </div>
+                <span className="font-mono font-semibold text-slate-300">
+                  ₹{(Number(item.price_snapshot || item.price || 0) * item.quantity).toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-300">Total Amount:</span>
+            <span className="text-xl font-black font-mono text-amber-400">
+              ₹{Number(pendingOrder.total_amount || pendingOrder.totalAmount || 0).toFixed(2)}
+            </span>
           </div>
         </div>
 
@@ -180,7 +162,7 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
 
         {/* Methods */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Select Payment Method:</div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Choose Payment Method:</div>
 
           <div className="grid grid-cols-1 gap-2.5">
             {/* UPI */}
@@ -317,7 +299,7 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
         <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
           <div>
             <div className="text-[11px] text-slate-400">Amount to Pay:</div>
-            <div className="text-lg font-black text-amber-400">₹{pendingOrder.total_amount.toFixed(2)}</div>
+            <div className="text-lg font-black text-amber-400">₹{Number(pendingOrder.total_amount || pendingOrder.totalAmount || 0).toFixed(2)}</div>
           </div>
 
           <button
@@ -333,7 +315,7 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
             ) : (
               <>
                 <Zap className="w-4 h-4" />
-                <span>Pay ₹{pendingOrder.total_amount.toFixed(2)} Now</span>
+                <span>Pay ₹{Number(pendingOrder.total_amount || pendingOrder.totalAmount || 0).toFixed(2)} Now</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
