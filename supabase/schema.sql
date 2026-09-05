@@ -206,22 +206,12 @@ CREATE POLICY "Users can update their own profile"
     USING (auth.uid() = auth_user_id);
 
 -- 2. Students RLS
-CREATE POLICY "Students can view their own record"
-    ON public.students FOR SELECT
-    USING (profile_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid()));
-
-CREATE POLICY "Vendors can view student info for their orders"
-    ON public.students FOR SELECT
-    USING (EXISTS (
-        SELECT 1 FROM public.orders o
-        JOIN public.vendors v ON v.id = o.vendor_id
-        JOIN public.profiles p ON p.id = v.profile_id
-        WHERE o.student_id = public.students.id AND p.auth_user_id = auth.uid()
-    ));
-
-CREATE POLICY "Students can insert their record"
-    ON public.students FOR INSERT
-    WITH CHECK (profile_id IN (SELECT id FROM public.profiles WHERE auth_user_id = auth.uid()));
+CREATE POLICY "Allow public read access on students" 
+    ON public.students FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on students" 
+    ON public.students FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on students" 
+    ON public.students FOR UPDATE USING (true);
 
 -- 3. Vendors RLS
 CREATE POLICY "Anyone authenticated can view active vendors"
@@ -262,79 +252,24 @@ CREATE POLICY "Vendors can delete their own food items"
     ));
 
 -- 5. Orders RLS
-CREATE POLICY "Students can view their own orders"
-    ON public.orders FOR SELECT
-    USING (student_id IN (
-        SELECT s.id FROM public.students s
-        JOIN public.profiles p ON p.id = s.profile_id
-        WHERE p.auth_user_id = auth.uid()
-    ));
-
-CREATE POLICY "Vendors can view orders assigned to them"
-    ON public.orders FOR SELECT
-    USING (vendor_id IN (
-        SELECT v.id FROM public.vendors v
-        JOIN public.profiles p ON p.id = v.profile_id
-        WHERE p.auth_user_id = auth.uid()
-    ));
-
-CREATE POLICY "Students can create orders"
-    ON public.orders FOR INSERT
-    WITH CHECK (student_id IN (
-        SELECT s.id FROM public.students s
-        JOIN public.profiles p ON p.id = s.profile_id
-        WHERE p.auth_user_id = auth.uid()
-    ));
-
-CREATE POLICY "Vendors can update status of assigned orders"
-    ON public.orders FOR UPDATE
-    USING (vendor_id IN (
-        SELECT v.id FROM public.vendors v
-        JOIN public.profiles p ON p.id = v.profile_id
-        WHERE p.auth_user_id = auth.uid()
-    ));
-
-CREATE POLICY "Students can update their pending order payment"
-    ON public.orders FOR UPDATE
-    USING (student_id IN (
-        SELECT s.id FROM public.students s
-        JOIN public.profiles p ON p.id = s.profile_id
-        WHERE p.auth_user_id = auth.uid()
-    ));
+CREATE POLICY "Allow public read access on orders" 
+    ON public.orders FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on orders" 
+    ON public.orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on orders" 
+    ON public.orders FOR UPDATE USING (true);
 
 -- 6. Order Items RLS
-CREATE POLICY "Users can view items of orders they can access"
-    ON public.order_items FOR SELECT
-    USING (EXISTS (
-        SELECT 1 FROM public.orders o
-        WHERE o.id = public.order_items.order_id
-    ));
-
-CREATE POLICY "Students can insert order items for their orders"
-    ON public.order_items FOR INSERT
-    WITH CHECK (EXISTS (
-        SELECT 1 FROM public.orders o
-        JOIN public.students s ON s.id = o.student_id
-        JOIN public.profiles p ON p.id = s.profile_id
-        WHERE o.id = public.order_items.order_id AND p.auth_user_id = auth.uid()
-    ));
+CREATE POLICY "Allow public read access on order_items" 
+    ON public.order_items FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on order_items" 
+    ON public.order_items FOR INSERT WITH CHECK (true);
 
 -- 7. Payments RLS
-CREATE POLICY "Users can view payments for accessible orders"
-    ON public.payments FOR SELECT
-    USING (EXISTS (
-        SELECT 1 FROM public.orders o
-        WHERE o.id = public.payments.order_id
-    ));
-
-CREATE POLICY "Students can insert payment for their order"
-    ON public.payments FOR INSERT
-    WITH CHECK (EXISTS (
-        SELECT 1 FROM public.orders o
-        JOIN public.students s ON s.id = o.student_id
-        JOIN public.profiles p ON p.id = s.profile_id
-        WHERE o.id = public.payments.order_id AND p.auth_user_id = auth.uid()
-    ));
+CREATE POLICY "Allow public read access on payments" 
+    ON public.payments FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on payments" 
+    ON public.payments FOR INSERT WITH CHECK (true);
 
 -- 8. Notifications RLS
 CREATE POLICY "Users can view their own notifications"
@@ -439,4 +374,43 @@ BEGIN
     ('a0000001-0000-0000-0000-000000000009', v_vendor_id, 'Express Breakfast Combo', 'Crispy Masala Dosa + 1 Hot Vada + Kulhad Masala Chai. Quick morning fuel for students on the rush.', 'Combos', 75.00, 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=600&auto=format&fit=crop&q=80', true, 25),
     ('a0000001-0000-0000-0000-000000000010', v_vendor_id, 'Study Fuel Snack Box', 'Veg Cheese Grilled Sandwich + French Fries + Cold Coffee with Ice Cream. Ideal for library study sessions.', 'Combos', 110.00, 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=600&auto=format&fit=crop&q=80', true, 30)
     ON CONFLICT (id) DO NOTHING;
+
+    -- Seed initial orders including TKN870
+    INSERT INTO public.orders (
+        id, order_number, token_number, student_id, vendor_id, 
+        subtotal, total_amount, payment_status, order_status, 
+        qr_token, qr_generated_at, notes
+    ) VALUES (
+        '33333333-3333-3333-3333-333333333870',
+        'ORD1000',
+        'TKN870',
+        s_student_id,
+        v_vendor_id,
+        70.00,
+        70.00,
+        'PAID',
+        'READY',
+        'SEC-TOK-870',
+        now(),
+        'Mobile pre-order pass'
+    ) ON CONFLICT (order_number) DO NOTHING;
+
+    INSERT INTO public.orders (
+        id, order_number, token_number, student_id, vendor_id, 
+        subtotal, total_amount, payment_status, order_status, 
+        qr_token, qr_generated_at, notes
+    ) VALUES (
+        '33333333-3333-3333-3333-333333333876',
+        'ORD1002',
+        'TKN876',
+        s_student_id,
+        v_vendor_id,
+        130.00,
+        130.00,
+        'PAID',
+        'READY',
+        'SEC-TOK-876',
+        now(),
+        'Mobile pre-order pass'
+    ) ON CONFLICT (order_number) DO NOTHING;
 END $$;

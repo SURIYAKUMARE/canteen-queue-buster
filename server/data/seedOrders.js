@@ -1,6 +1,39 @@
 // Seed Orders for CampusBite Demo
 export const initialSeedOrders = [
   {
+    orderId: 'ORD1000',
+    orderNumber: 'ORD1000',
+    tokenNumber: 'TKN870',
+    studentId: 'STU001',
+    studentName: 'Arun Kumar',
+    studentDept: 'CSE Dept • 3rd Year',
+    studentPhone: '+91 98765 43210',
+    foodItems: [
+      { id: 'food-1', name: 'Crispy Masala Dosa', price: 55, quantity: 1, isVeg: true, notes: '' },
+      { id: 'food-7', name: 'Kulhad Masala Chai', price: 15, quantity: 1, isVeg: true, notes: '' }
+    ],
+    items: [
+      { id: 'food-1', name: 'Crispy Masala Dosa', price: 55, quantity: 1, isVeg: true, notes: '' },
+      { id: 'food-7', name: 'Kulhad Masala Chai', price: 15, quantity: 1, isVeg: true, notes: '' }
+    ],
+    quantities: 2,
+    totalAmount: 70,
+    paymentMethod: 'UPI (Google Pay)',
+    paymentStatus: 'PAID',
+    orderStatus: 'READY',
+    createdAt: '11:45 AM',
+    estimatedPrepMins: 5,
+    counterBay: 'Bay 1 (Express)',
+    qrCodeData: JSON.stringify({
+      orderId: 'ORD1000',
+      tokenNumber: 'TKN870',
+      studentId: 'STU001',
+      studentName: 'Arun Kumar',
+      totalAmount: 70,
+      token: 'SEC-TOK-870'
+    })
+  },
+  {
     orderId: 'ORD1001',
     orderNumber: 'ORD1001',
     tokenNumber: 'TKN245',

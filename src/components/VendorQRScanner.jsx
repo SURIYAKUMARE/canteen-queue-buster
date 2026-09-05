@@ -357,12 +357,12 @@ export default function VendorQRScanner() {
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => {
-                setManualCodeInput('TKN876');
-                handleScannedData('TKN876');
+                setManualCodeInput('TKN870');
+                handleScannedData('TKN870');
               }}
               className="flex-1 py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
             >
-              <span>⚡ Try Demo Token TKN876</span>
+              <span>⚡ Try Demo Token TKN870</span>
             </button>
             <button
               onClick={() => setVerificationResult(null)}
@@ -389,7 +389,7 @@ export default function VendorQRScanner() {
         <form onSubmit={handleManualSubmit} className="flex gap-2">
           <input
             type="text"
-            placeholder="Enter token (e.g. TKN876, TKN245, ORD1001)"
+            placeholder="Enter token (e.g. TKN870, TKN876, TKN245)"
             value={manualCodeInput}
             onChange={(e) => setManualCodeInput(e.target.value.toUpperCase())}
             autoCapitalize="characters"
@@ -413,10 +413,10 @@ export default function VendorQRScanner() {
           </p>
           <div className="flex flex-wrap gap-1.5">
             {[
+              { label: 'TKN870', desc: 'Ready' },
               { label: 'TKN876', desc: 'Ready' },
               { label: 'TKN245', desc: 'Paid' },
-              { label: 'ORD1001', desc: 'Arun' },
-              { label: 'ORD1002', desc: 'Priya' }
+              { label: 'ORD1001', desc: 'Arun' }
             ].map(chip => (
               <button
                 key={chip.label}

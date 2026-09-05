@@ -134,6 +134,7 @@ export default function VendorLogin({ onBack }) {
 
           <button
             id="vendor-submit-btn"
+            data-testid="vendor-login-btn"
             type="submit"
             disabled={loading}
             className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
