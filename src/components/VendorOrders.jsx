@@ -13,6 +13,7 @@ import {
   Flame,
   CheckCheck
 } from 'lucide-react';
+import { normalizeOrder } from '../utils/orderUtils.js';
 
 export default function VendorOrders() {
   const { 
@@ -95,13 +96,14 @@ export default function VendorOrders() {
             No orders found under {vendorOrderFilter} status.
           </div>
         ) : (
-          filteredOrders.map((ord) => {
+          filteredOrders.map((rawOrd) => {
+            const ord = normalizeOrder(rawOrd);
             const status = getStatus(ord);
             const orderId = ord.id || ord.orderId;
             const orderNum = ord.order_number || ord.orderNumber;
-            const studentName = ord.students?.full_name || ord.studentName || 'Student';
-            const studentId = ord.students?.student_id || ord.studentId || '21BCS042';
-            const items = ord.order_items || ord.items || ord.foodItems || [];
+            const studentName = ord.studentName || 'Arun Kumar';
+            const studentId = ord.studentId || 'STU001';
+            const items = ord.items || [];
             const amount = getAmount(ord);
 
             return (

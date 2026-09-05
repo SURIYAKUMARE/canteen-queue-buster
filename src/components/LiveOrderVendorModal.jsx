@@ -1,23 +1,40 @@
 import React from 'react';
 import { useCampus } from '../context/CampusContext';
 import { Bell, Check, X, User, ShoppingBag, ShieldCheck, Hash } from 'lucide-react';
+import { normalizeOrder } from '../utils/orderUtils.js';
 
 export default function LiveOrderVendorModal() {
-  const { liveVendorOrderPopup, setLiveVendorOrderPopup, acceptOrder, rejectOrder, activeRole } = useCampus();
+  const { liveVendorOrderPopup, setLiveVendorOrderPopup, acceptOrder, rejectOrder, activeRole, orders } = useCampus();
 
   if (!liveVendorOrderPopup) return null;
 
   // Only show when in vendor role or split presentation mode
   if (activeRole !== 'vendor' && activeRole !== 'split') return null;
 
-  const order = liveVendorOrderPopup;
-  const orderId = order.id || order.orderId;
-  const orderNumber = order.order_number || order.orderNumber || 'CB-10245';
-  const studentName = order.students?.full_name || order.studentName || 'Student';
-  const studentId = order.students?.student_id || order.studentId || '23AIML001';
+  const rawOrder = liveVendorOrderPopup;
+  const orderId = rawOrder.id || rawOrder.orderId;
+  const orderNumber = rawOrder.order_number || rawOrder.orderNumber || 'CB-10245';
+
+  // Check if orders context has richer items details
+  const contextMatch = (orders || []).find(o => 
+    o.id === orderId || 
+    o.order_number === orderNumber || 
+    (rawOrder.id && o.id === rawOrder.id)
+  );
+
+  const order = normalizeOrder({
+    ...contextMatch,
+    ...rawOrder,
+    items: (rawOrder.items && rawOrder.items.length > 0)
+      ? rawOrder.items
+      : (contextMatch?.items || rawOrder.order_items || contextMatch?.order_items)
+  });
+
+  const studentName = order.studentName || 'Arun Kumar';
+  const studentId = order.studentId || 'STU001';
   const totalAmount = Number(order.total_amount || order.totalAmount || 0);
   const paymentStatus = order.payment_status || order.paymentStatus || 'PAID';
-  const items = order.order_items || order.items || order.foodItems || [];
+  const items = order.items || [];
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
@@ -77,21 +94,32 @@ export default function LiveOrderVendorModal() {
             <span>Items Ordered:</span>
           </h4>
 
-          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 space-y-1.5 max-h-40 overflow-y-auto text-xs">
+          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 space-y-1.5 max-h-44 overflow-y-auto text-xs divide-y divide-slate-850/60">
             {items.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between text-slate-200">
-                <span className="font-medium">
-                  {item.quantity} × {item.food_name_snapshot || item.name}
-                </span>
-                <span className="font-mono text-slate-400">
+              <div key={idx} className="flex items-center justify-between text-slate-200 pt-1.5 first:pt-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-amber-400 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 text-[11px]">
+                    {item.quantity}×
+                  </span>
+                  <span className="font-medium text-slate-100">
+                    {item.food_name_snapshot || item.name}
+                  </span>
+                </div>
+                <span className="font-mono text-slate-300 font-semibold">
                   ₹{Number(item.price_snapshot || item.price || 0) * item.quantity}
                 </span>
               </div>
             ))}
 
+            {order.cleanNotes && (
+              <div className="text-[11px] text-amber-300 italic pt-1.5 border-t border-slate-800">
+                Note: "{order.cleanNotes}"
+              </div>
+            )}
+
             <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs font-bold">
               <span className="text-slate-400">Total:</span>
-              <span className="text-amber-400 text-sm font-mono">₹{totalAmount.toFixed(2)}</span>
+              <span className="text-amber-400 text-sm font-mono font-black">₹{totalAmount.toFixed(2)}</span>
             </div>
           </div>
         </div>

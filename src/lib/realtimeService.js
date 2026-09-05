@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient.js';
 import { realtimeEmitter } from './databaseService.js';
+import { normalizeOrder } from '../utils/orderUtils.js';
 
 /**
  * Subscribe to live order events (New Paid Orders, Status Updates)
@@ -9,6 +10,36 @@ import { realtimeEmitter } from './databaseService.js';
  */
 export function subscribeToOrders({ onNewOrder, onOrderUpdate }) {
   if (isSupabaseConfigured && supabase) {
+    const processPayload = async (rawRow, isNew) => {
+      if (!rawRow) return;
+      let enriched = normalizeOrder(rawRow);
+
+      // Attempt to fetch relations from Supabase if not present in raw row
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*, order_items(*), students(*)')
+          .eq('id', rawRow.id)
+          .maybeSingle();
+
+        if (!error && data) {
+          enriched = normalizeOrder({
+            ...data,
+            items: (data.order_items && data.order_items.length > 0) ? data.order_items : enriched.items
+          });
+        }
+      } catch (e) {
+        // Fallback to normalized initial
+      }
+
+      if (isNew && onNewOrder) {
+        onNewOrder(enriched);
+      }
+      if (!isNew && onOrderUpdate) {
+        onOrderUpdate(enriched);
+      }
+    };
+
     const channel = supabase
       .channel('campusbite-orders-realtime')
       .on(
@@ -16,7 +47,7 @@ export function subscribeToOrders({ onNewOrder, onOrderUpdate }) {
         { event: 'INSERT', schema: 'public', table: 'orders' },
         payload => {
           if (payload.new && payload.new.payment_status === 'PAID') {
-            if (onNewOrder) onNewOrder(payload.new);
+            processPayload(payload.new, true);
           }
         }
       )
@@ -26,10 +57,8 @@ export function subscribeToOrders({ onNewOrder, onOrderUpdate }) {
         payload => {
           if (payload.new) {
             // Check if transition from PENDING to PAID
-            if (payload.old?.payment_status !== 'PAID' && payload.new.payment_status === 'PAID') {
-              if (onNewOrder) onNewOrder(payload.new);
-            }
-            if (onOrderUpdate) onOrderUpdate(payload.new);
+            const isTransitionToPaid = payload.old?.payment_status !== 'PAID' && payload.new.payment_status === 'PAID';
+            processPayload(payload.new, isTransitionToPaid);
           }
         }
       )

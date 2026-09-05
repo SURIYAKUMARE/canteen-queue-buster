@@ -13,6 +13,7 @@ import {
   Zap,
   Check
 } from 'lucide-react';
+import { normalizeOrder } from '../utils/orderUtils.js';
 
 export default function VendorDashboard() {
   const { 
@@ -145,14 +146,15 @@ export default function VendorDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {paidOrders.map((order) => {
+            {paidOrders.map((rawOrder) => {
+              const order = normalizeOrder(rawOrder);
               const orderId = order.order_number || order.orderNumber || order.id;
               const tokenNumber = order.token_number || order.tokenNumber || 'TKN245';
               const status = order.order_status || order.orderStatus || 'PAID';
               const paymentStatus = order.payment_status || order.paymentStatus || 'PAID';
-              const studentName = order.students?.profiles?.full_name || order.students?.full_name || order.studentName || 'Arun Kumar';
-              const studentId = order.students?.student_id || order.studentId || 'STU001';
-              const items = order.order_items || order.items || order.foodItems || [];
+              const studentName = order.studentName || 'Arun Kumar';
+              const studentId = order.studentId || 'STU001';
+              const items = order.items || [];
               const totalAmount = Number(order.total_amount || order.totalAmount || 0);
               const orderTime = formatOrderTime(order);
 

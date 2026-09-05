@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient.js';
 import { initialCampusMenu } from '../../server/data/campusMenu.js';
 import { initialSeedOrders } from '../../server/data/seedOrders.js';
+import { encodeOrderNotes, normalizeOrder, synthesizeItemsForAmount } from '../utils/orderUtils.js';
 
 // Global Event Emitter for Realtime pub-sub
 class RealtimeEmitter {
@@ -731,7 +732,7 @@ export const databaseService = {
   // --------------------------------------------------------------------------
   // ORDERS & CHECKOUT
   // --------------------------------------------------------------------------
-  async createPendingOrder({ studentId, vendorId, studentName, items, subtotal, totalAmount, notes = '' }) {
+  async createPendingOrder({ studentId, studentRollNo, vendorId, studentName, items, subtotal, totalAmount, notes = '' }) {
     // Generate realistic Order ID (e.g. ORD1001) and Token Number (e.g. TKN245)
     const existingOrders = getLocalTable('orders', []);
     const orderNumber = `ORD${1001 + existingOrders.length}`;
@@ -741,6 +742,15 @@ export const databaseService = {
 
     const parsedSubtotal = parseFloat(subtotal) || 0;
     const parsedTotal = parseFloat(totalAmount) || parsedSubtotal;
+    const resolvedStudentId = studentRollNo || (validUUID(studentId) ? 'STU001' : studentId);
+
+    // Encode items and student snapshot into notes so raw Supabase Realtime payloads have them
+    const enrichedNotes = encodeOrderNotes({
+      notes,
+      items,
+      studentName: studentName || DEFAULT_PROFILES[1].full_name,
+      studentId: resolvedStudentId
+    });
 
     const orderRow = {
       id: crypto.randomUUID(),
@@ -749,7 +759,7 @@ export const databaseService = {
       token_number: tokenNumber,
       tokenNumber: tokenNumber,
       student_id: validUUID(studentId) ? studentId : DEFAULT_STUDENTS[0].id,
-      studentId: validUUID(studentId) ? studentId : DEFAULT_STUDENTS[0].student_id,
+      studentId: resolvedStudentId,
       studentName: studentName || DEFAULT_PROFILES[1].full_name,
       vendor_id: validUUID(vendorId) ? vendorId : DEFAULT_VENDORS[0].id,
       subtotal: parsedSubtotal,
@@ -762,7 +772,7 @@ export const databaseService = {
       qr_token: null,
       qr_generated_at: null,
       qr_scanned_at: null,
-      notes,
+      notes: enrichedNotes,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -770,10 +780,10 @@ export const databaseService = {
     const orderItemsRows = items.map(item => ({
       id: crypto.randomUUID(),
       order_id: orderRow.id,
-      food_item_id: validUUID(item.id) ? item.id : null,
+      food_item_id: null, // Safe: avoids foreign key violation if remote food_items is unseeded
       food_name_snapshot: item.name,
       name: item.name,
-      quantity: item.quantity,
+      quantity: item.quantity || 1,
       price_snapshot: parseFloat(item.price) || 0,
       price: parseFloat(item.price) || 0,
       subtotal: (parseFloat(item.price) || 0) * (item.quantity || 1)
@@ -803,7 +813,7 @@ export const databaseService = {
           const supabaseItemsPayload = orderItemsRows.map(it => ({
             id: it.id,
             order_id: it.order_id,
-            food_item_id: it.food_item_id,
+            food_item_id: null,
             food_name_snapshot: it.food_name_snapshot,
             quantity: it.quantity,
             price_snapshot: it.price_snapshot,
@@ -816,7 +826,7 @@ export const databaseService = {
       }
     }
 
-    const fullOrder = { ...orderRow, items: orderItemsRows, foodItems: orderItemsRows, order_items: orderItemsRows };
+    const fullOrder = normalizeOrder({ ...orderRow, items: orderItemsRows, foodItems: orderItemsRows, order_items: orderItemsRows });
     const orders = getLocalTable('orders', []);
     orders.unshift(fullOrder);
     setLocalTable('orders', orders);
@@ -880,14 +890,32 @@ export const databaseService = {
         payment: paymentRow
       };
       setLocalTable('orders', orders);
-      if (!updatedOrder) updatedOrder = orders[idx];
+
+      if (updatedOrder) {
+        // Merge local items if Supabase returned empty order_items
+        const supItems = updatedOrder.order_items || updatedOrder.items;
+        if (!supItems || supItems.length === 0) {
+          updatedOrder.items = orders[idx].items;
+          updatedOrder.order_items = orders[idx].items;
+          updatedOrder.foodItems = orders[idx].items;
+        }
+        if (!updatedOrder.studentName && orders[idx].studentName) {
+          updatedOrder.studentName = orders[idx].studentName;
+        }
+        if (!updatedOrder.studentId && orders[idx].studentId) {
+          updatedOrder.studentId = orders[idx].studentId;
+        }
+      } else {
+        updatedOrder = orders[idx];
+      }
     }
 
     if (updatedOrder) {
+      const normalized = normalizeOrder(updatedOrder);
       // Notify Realtime channels of new paid order immediately
-      realtimeEmitter.emit('NEW_PAID_ORDER', updatedOrder);
-      realtimeEmitter.emit('ORDER_UPDATED', updatedOrder);
-      return updatedOrder;
+      realtimeEmitter.emit('NEW_PAID_ORDER', normalized);
+      realtimeEmitter.emit('ORDER_UPDATED', normalized);
+      return normalized;
     }
     throw new Error('Order not found for payment completion.');
   },
@@ -905,13 +933,15 @@ export const databaseService = {
         if (filter.status && filter.status !== 'ALL') query = query.eq('order_status', filter.status);
 
         const { data, error } = await query;
-        if (!error && data && data.length > 0) return data;
+        if (!error && data && data.length > 0) {
+          return data.map(ord => normalizeOrder(ord));
+        }
       } catch (e) {
         console.warn('Supabase getOrders fallback:', e.message);
       }
     }
 
-    let orders = getLocalTable('orders', DEFAULT_ORDERS);
+    let orders = getLocalTable('orders', DEFAULT_ORDERS).map(ord => normalizeOrder(ord));
     if (filter.studentId) {
       const sId = String(filter.studentId).toLowerCase();
       orders = orders.filter(o => 
@@ -930,6 +960,49 @@ export const databaseService = {
       orders = orders.filter(o => o.order_status === filter.status);
     }
     return orders;
+  },
+
+  async getOrderById(orderIdentifier) {
+    if (!orderIdentifier) return null;
+    const cleanId = String(orderIdentifier).trim();
+
+    // 1. Check local storage first for quick hit
+    const localOrders = getLocalTable('orders', DEFAULT_ORDERS);
+    const local = localOrders.find(o => 
+      o.id === cleanId || 
+      o.order_number === cleanId || 
+      o.orderId === cleanId || 
+      o.token_number === cleanId ||
+      o.tokenNumber === cleanId
+    );
+
+    // 2. Query Supabase for latest state
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const isValidUUID = (v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
+        let query = supabase.from('orders').select('*, order_items(*), students(*)');
+        if (isValidUUID(cleanId)) {
+          query = query.eq('id', cleanId);
+        } else {
+          query = query.or(`order_number.eq.${cleanId},token_number.eq.${cleanId}`);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (!error && data) {
+          const supItems = (data.order_items && data.order_items.length > 0) ? data.order_items : (local?.items || null);
+          return normalizeOrder({
+            ...data,
+            items: supItems,
+            order_items: supItems
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase getOrderById error:', e.message);
+      }
+    }
+
+    if (local) return normalizeOrder(local);
+
+    return null;
   },
 
   async updateOrderStatus(orderId, newStatus) {
@@ -978,11 +1051,12 @@ export const databaseService = {
         ...(newStatus === 'COMPLETED' ? { qr_scanned_at: updatedAt } : {})
       };
       setLocalTable('orders', orders);
-      realtimeEmitter.emit('ORDER_UPDATED', orders[idx]);
-      if (!updatedOrder) updatedOrder = orders[idx];
+      const normalized = normalizeOrder(orders[idx]);
+      realtimeEmitter.emit('ORDER_UPDATED', normalized);
+      if (!updatedOrder) updatedOrder = normalized;
     }
 
-    return updatedOrder || { order_status: newStatus, updated_at: updatedAt };
+    return normalizeOrder(updatedOrder || { order_status: newStatus, updated_at: updatedAt });
   },
 
   // --------------------------------------------------------------------------
@@ -1276,11 +1350,12 @@ export const databaseService = {
         updated_at: updatedAt
       };
       setLocalTable('orders', orders);
-      realtimeEmitter.emit('ORDER_UPDATED', orders[idx]);
-      if (!updatedOrder) updatedOrder = orders[idx];
+      const normalized = normalizeOrder(orders[idx]);
+      realtimeEmitter.emit('ORDER_UPDATED', normalized);
+      if (!updatedOrder) updatedOrder = normalized;
     }
 
-    return updatedOrder || { order_status: 'COMPLETED', qr_scanned_at: updatedAt };
+    return normalizeOrder(updatedOrder || { order_status: 'COMPLETED', qr_scanned_at: updatedAt });
   },
 
   async confirmFoodCollection(orderId) {

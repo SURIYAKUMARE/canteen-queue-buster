@@ -5,6 +5,7 @@ import { subscribeToOrders, subscribeToFoodItems } from '../lib/realtimeService.
 import { generateOrderQRCode } from '../utils/qrGenerator.js';
 import { playReadyChime, playSuccessChime } from '../utils/audioAlert.js';
 import { isSupabaseConfigured } from '../lib/supabaseClient.js';
+import { normalizeOrder } from '../utils/orderUtils.js';
 
 const CampusContext = createContext(null);
 
@@ -117,31 +118,42 @@ export function CampusProvider({ children }) {
   // Setup Realtime Subscriptions
   useEffect(() => {
     const unsubOrders = subscribeToOrders({
-      onNewOrder: (newOrder) => {
-        // Vendor live alert popup
-        setLiveVendorOrderPopup(newOrder);
+      onNewOrder: async (incomingOrder) => {
+        let orderWithItems = normalizeOrder(incomingOrder);
+        if (!orderWithItems.items?.length || orderWithItems.items.some(i => String(i.id).startsWith('syn-'))) {
+          try {
+            const fresh = await databaseService.getOrderById(incomingOrder.id || incomingOrder.order_number);
+            if (fresh && fresh.items?.length) {
+              orderWithItems = fresh;
+            }
+          } catch (e) {}
+        }
+
+        // Vendor live alert popup with guaranteed complete item breakdown
+        setLiveVendorOrderPopup(orderWithItems);
         playSuccessChime();
 
         // Add vendor notification
         addNotification({
           targetRole: 'vendor',
           title: '🔔 NEW ORDER RECEIVED',
-          message: `Order #${newOrder.order_number} received for ₹${newOrder.total_amount}.`,
+          message: `Order #${orderWithItems.order_number} received for ₹${orderWithItems.total_amount}.`,
           type: 'new_order',
-          orderId: newOrder.order_number
+          orderId: orderWithItems.order_number
         });
 
         // Update orders list
         setOrders(prev => {
-          const exists = prev.some(o => o.id === newOrder.id);
+          const exists = prev.some(o => o.id === orderWithItems.id || o.order_number === orderWithItems.order_number);
           if (exists) {
-            return prev.map(o => o.id === newOrder.id ? { ...o, ...newOrder } : o);
+            return prev.map(o => (o.id === orderWithItems.id || o.order_number === orderWithItems.order_number) ? { ...o, ...orderWithItems } : o);
           }
-          return [newOrder, ...prev];
+          return [orderWithItems, ...prev];
         });
       },
       onOrderUpdate: (updatedOrder) => {
-        setOrders(prev => prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
+        const normalized = normalizeOrder(updatedOrder);
+        setOrders(prev => prev.map(o => (o.id === normalized.id || o.order_number === normalized.order_number) ? { ...o, ...normalized } : o));
 
         // Update active student order
         setActiveStudentOrder(curr => {
@@ -260,8 +272,9 @@ export function CampusProvider({ children }) {
       // Create Order in Supabase with PENDING status
       const createdOrder = await databaseService.createPendingOrder({
         studentId: currentUser?.student?.id || studentUser.id,
+        studentRollNo: currentUser?.student?.student_id || studentUser.rollNo || 'STU001',
         vendorId: vendorUser.id,
-        studentName: currentUser?.profile?.full_name || studentUser.name,
+        studentName: currentUser?.profile?.full_name || studentUser.name || 'Arun Kumar',
         items: orderItems,
         subtotal: cartTotal,
         totalAmount: cartTotal,

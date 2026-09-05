@@ -12,18 +12,19 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { generateOrderQRCode } from '../utils/qrGenerator.js';
+import { normalizeOrder } from '../utils/orderUtils.js';
 
 export default function StudentQRView() {
   const { activeStudentOrder, setStudentTab, setActiveRole, setVendorTab, currentUser, studentUser } = useCampus();
   const [qrDataUrl, setQrDataUrl] = useState('');
 
-  const order = activeStudentOrder;
+  const order = normalizeOrder(activeStudentOrder);
   const orderNumber = order?.order_number || order?.orderNumber || 'ORD1001';
   const tokenNumber = order?.token_number || order?.tokenNumber || 'TKN245';
   const orderStatus = order?.order_status || order?.orderStatus || 'PAID';
   const paymentStatus = order?.payment_status || order?.paymentStatus || 'PAID';
   const totalAmount = Number(order?.total_amount || order?.totalAmount || 0);
-  const items = order?.order_items || order?.items || order?.foodItems || [];
+  const items = order?.items || [];
   const studentName = currentUser?.profile?.full_name || order?.studentName || studentUser.name || 'Arun Kumar';
   const studentId = currentUser?.student?.student_id || order?.studentId || studentUser.rollNo || 'STU001';
 
