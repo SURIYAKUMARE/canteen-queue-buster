@@ -14,8 +14,11 @@ import {
   Check
 } from 'lucide-react';
 import { normalizeOrder } from '../utils/orderUtils.js';
+import VendorAnalyticsWidget from './VendorAnalyticsWidget';
+
 
 export default function VendorDashboard() {
+
   const { 
     orders, 
     isCanteenOpen, 
@@ -115,8 +118,12 @@ export default function VendorDashboard() {
         </button>
       </div>
 
+      {/* Daily Performance Analytics Widget */}
+      <VendorAnalyticsWidget />
+
       {/* Placed Paid Orders Section */}
       <div className="space-y-3 pt-2">
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">

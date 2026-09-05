@@ -17,21 +17,25 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BarChart3
 } from 'lucide-react';
+import AdminAnalytics from './AdminAnalytics';
 
 export default function AdminPortal({ onBack }) {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [adminPasscode, setAdminPasscode] = useState('');
   const [authError, setAuthError] = useState('');
 
-  const [activeTab, setActiveTab] = useState('students'); // 'students' | 'vendors' | 'food'
+  const [activeTab, setActiveTab] = useState('analytics'); // 'analytics' | 'students' | 'vendors' | 'food'
 
   // Data states
   const [students, setStudents] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [foodItems, setFoodItems] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+
 
   // Modals
   const [studentModalOpen, setStudentModalOpen] = useState(false);
@@ -80,17 +84,20 @@ export default function AdminPortal({ onBack }) {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [stuList, venList, foodList] = await Promise.all([
+      const [stuList, venList, foodList, ordList] = await Promise.all([
         databaseService.getStudents(),
         databaseService.getVendors(),
-        databaseService.getFoodItems()
+        databaseService.getFoodItems(),
+        databaseService.getOrders()
       ]);
       setStudents(stuList || []);
       setVendors(venList || []);
       setFoodItems(foodList || []);
+      setOrders(ordList || []);
       if (venList?.length > 0 && !newFood.vendorId) {
         setNewFood(prev => ({ ...prev, vendorId: venList[0].id }));
       }
+
     } catch (err) {
       console.error('Failed to load admin data:', err);
     } finally {
@@ -340,7 +347,18 @@ export default function AdminPortal({ onBack }) {
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-3 gap-2 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 text-xs font-bold">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-900 p-1.5 rounded-2xl border border-slate-800 text-xs font-bold">
+        <button
+          id="admin-analytics-tab"
+          onClick={() => setActiveTab('analytics')}
+          className={`py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition ${
+            activeTab === 'analytics' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          <span>Analytics</span>
+        </button>
+
         <button
           id="admin-students-tab"
           onClick={() => setActiveTab('students')}
@@ -371,9 +389,10 @@ export default function AdminPortal({ onBack }) {
           }`}
         >
           <UtensilsCrossed className="w-4 h-4" />
-          <span>Food Catalog ({foodItems.length})</span>
+          <span>Catalog ({foodItems.length})</span>
         </button>
       </div>
+
 
       {/* SUCCESS / ERROR ALERTS */}
       {formSuccess && (
@@ -401,9 +420,22 @@ export default function AdminPortal({ onBack }) {
       )}
 
       {/* ------------------------------------------------------------- */}
+      {/* 0. ANALYTICS TAB */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === 'analytics' && (
+        <AdminAnalytics
+          orders={orders}
+          students={students}
+          vendors={vendors}
+          foodItems={foodItems}
+        />
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* 1. STUDENTS TAB */}
       {/* ------------------------------------------------------------- */}
       {activeTab === 'students' && (
+
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>

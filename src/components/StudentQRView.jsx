@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { generateOrderQRCode } from '../utils/qrGenerator.js';
 import { normalizeOrder } from '../utils/orderUtils.js';
+import { generateSecurePassPayload } from '../utils/security.js';
 
 export default function StudentQRView() {
   const { activeStudentOrder, setStudentTab, setActiveRole, setVendorTab, currentUser, studentUser } = useCampus();
@@ -32,22 +33,22 @@ export default function StudentQRView() {
     if (!order) return;
     const generateQR = async () => {
       const orderId = order.order_number || order.orderId || order.id;
-      const token = order.qr_token || order.token || 'SEC-TOK-DEMO';
-      const vendorId = order.vendor_id || order.vendorId;
-
-      const payload = {
-        orderId,
-        orderNumber: orderId,
-        tokenNumber,
-        studentName,
-        studentId,
-        token,
-        vendorId,
-        amount: totalAmount
-      };
+      const vendorId = order.vendor_id || order.vendorId || 'VEN001';
 
       try {
-        const url = await generateOrderQRCode(payload);
+        const securePass = await generateSecurePassPayload({
+          orderId,
+          tokenNumber,
+          studentId,
+          vendorId,
+          ttlMinutes: 60
+        });
+
+        const url = await generateOrderQRCode({
+          ...securePass,
+          studentName,
+          amount: totalAmount
+        });
         setQrDataUrl(url);
       } catch (err) {
         console.error('Failed to generate dynamic QR code:', err);

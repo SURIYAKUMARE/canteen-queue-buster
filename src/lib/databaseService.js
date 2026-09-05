@@ -2,6 +2,9 @@ import { supabase, isSupabaseConfigured } from './supabaseClient.js';
 import { initialCampusMenu } from '../../server/data/campusMenu.js';
 import { initialSeedOrders } from '../../server/data/seedOrders.js';
 import { encodeOrderNotes, normalizeOrder, synthesizeItemsForAmount } from '../utils/orderUtils.js';
+import { orderService } from '../services/orderService.js';
+import { syncEngine } from '../services/syncEngine.js';
+import { checkScanRateLimit, verifySecurePassPayload } from '../utils/security.js';
 
 // Global Event Emitter for Realtime pub-sub
 class RealtimeEmitter {
@@ -732,101 +735,8 @@ export const databaseService = {
   // --------------------------------------------------------------------------
   // ORDERS & CHECKOUT
   // --------------------------------------------------------------------------
-  async createPendingOrder({ studentId, studentRollNo, vendorId, studentName, items, subtotal, totalAmount, notes = '' }) {
-    // Generate realistic Order ID (e.g. ORD1001) and Token Number (e.g. TKN245)
-    const existingOrders = getLocalTable('orders', []);
-    const orderNumber = `ORD${1001 + existingOrders.length}`;
-    const tokenNumber = `TKN${Math.floor(200 + Math.random() * 790)}`;
-
-    const validUUID = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-
-    const parsedSubtotal = parseFloat(subtotal) || 0;
-    const parsedTotal = parseFloat(totalAmount) || parsedSubtotal;
-    const resolvedStudentId = studentRollNo || (validUUID(studentId) ? 'STU001' : studentId);
-
-    // Encode items and student snapshot into notes so raw Supabase Realtime payloads have them
-    const enrichedNotes = encodeOrderNotes({
-      notes,
-      items,
-      studentName: studentName || DEFAULT_PROFILES[1].full_name,
-      studentId: resolvedStudentId
-    });
-
-    const orderRow = {
-      id: crypto.randomUUID(),
-      order_number: orderNumber,
-      orderId: orderNumber,
-      token_number: tokenNumber,
-      tokenNumber: tokenNumber,
-      student_id: validUUID(studentId) ? studentId : DEFAULT_STUDENTS[0].id,
-      studentId: resolvedStudentId,
-      studentName: studentName || DEFAULT_PROFILES[1].full_name,
-      vendor_id: validUUID(vendorId) ? vendorId : DEFAULT_VENDORS[0].id,
-      subtotal: parsedSubtotal,
-      total_amount: parsedTotal,
-      totalAmount: parsedTotal,
-      payment_status: 'PENDING',
-      paymentStatus: 'PENDING',
-      order_status: 'PENDING_PAYMENT',
-      orderStatus: 'PENDING_PAYMENT',
-      qr_token: null,
-      qr_generated_at: null,
-      qr_scanned_at: null,
-      notes: enrichedNotes,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    const orderItemsRows = items.map(item => ({
-      id: crypto.randomUUID(),
-      order_id: orderRow.id,
-      food_item_id: null, // Safe: avoids foreign key violation if remote food_items is unseeded
-      food_name_snapshot: item.name,
-      name: item.name,
-      quantity: item.quantity || 1,
-      price_snapshot: parseFloat(item.price) || 0,
-      price: parseFloat(item.price) || 0,
-      subtotal: (parseFloat(item.price) || 0) * (item.quantity || 1)
-    }));
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const supabaseOrderPayload = {
-          id: orderRow.id,
-          order_number: orderRow.order_number,
-          token_number: orderRow.token_number,
-          student_id: orderRow.student_id,
-          vendor_id: orderRow.vendor_id,
-          subtotal: orderRow.subtotal,
-          total_amount: orderRow.total_amount,
-          payment_status: orderRow.payment_status,
-          order_status: orderRow.order_status,
-          qr_token: orderRow.qr_token,
-          qr_generated_at: orderRow.qr_generated_at,
-          qr_scanned_at: orderRow.qr_scanned_at,
-          notes: orderRow.notes,
-          created_at: orderRow.created_at,
-          updated_at: orderRow.updated_at
-        };
-        const { data: order, error: ordError } = await supabase.from('orders').insert([supabaseOrderPayload]).select().single();
-        if (!ordError && order) {
-          const supabaseItemsPayload = orderItemsRows.map(it => ({
-            id: it.id,
-            order_id: it.order_id,
-            food_item_id: null,
-            food_name_snapshot: it.food_name_snapshot,
-            quantity: it.quantity,
-            price_snapshot: it.price_snapshot,
-            subtotal: it.subtotal
-          }));
-          await supabase.from('order_items').insert(supabaseItemsPayload);
-        }
-      } catch (e) {
-        console.warn('Supabase createPendingOrder fallback:', e.message);
-      }
-    }
-
-    const fullOrder = normalizeOrder({ ...orderRow, items: orderItemsRows, foodItems: orderItemsRows, order_items: orderItemsRows });
+  async createPendingOrder(params) {
+    const fullOrder = await orderService.createAtomicOrder(params);
     const orders = getLocalTable('orders', []);
     orders.unshift(fullOrder);
     setLocalTable('orders', orders);
@@ -1063,6 +973,22 @@ export const databaseService = {
   // QR CODE VALIDATION & REDEMPTION (VENDOR CAMERA SCANNER)
   // --------------------------------------------------------------------------
   async verifyQRCode({ orderId, qrToken, tokenNumber, rawPayload, vendorId }) {
+    // 1. Scan Rate Limiting Check
+    const rateCheck = checkScanRateLimit();
+    if (!rateCheck.allowed) {
+      return { valid: false, error: rateCheck.error };
+    }
+
+    // 2. Cryptographic V2 Pass Signature Verification
+    if (rawPayload && typeof rawPayload === 'object' && rawPayload.v === 2) {
+      const sec = await verifySecurePassPayload(rawPayload, vendorId);
+      if (!sec.valid) {
+        return { valid: false, error: sec.error };
+      }
+      orderId = sec.orderId;
+      tokenNumber = sec.tokenNumber;
+    }
+
     let targetOrderId = orderId ? String(orderId).trim() : '';
     let targetTokenNumber = tokenNumber ? String(tokenNumber).trim() : '';
     let targetQrToken = qrToken ? String(qrToken).trim() : '';

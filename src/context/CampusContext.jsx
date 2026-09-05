@@ -6,8 +6,10 @@ import { generateOrderQRCode } from '../utils/qrGenerator.js';
 import { playReadyChime, playSuccessChime } from '../utils/audioAlert.js';
 import { isSupabaseConfigured } from '../lib/supabaseClient.js';
 import { normalizeOrder } from '../utils/orderUtils.js';
+import { notifyOrderStatus } from '../utils/browserNotifications.js';
 
 const CampusContext = createContext(null);
+
 
 export function CampusProvider({ children }) {
   // Global Role Mode: 'student' | 'vendor' | 'split' (side-by-side presentation)
@@ -161,7 +163,9 @@ export function CampusProvider({ children }) {
             if (updatedOrder.order_status === 'READY') {
               playReadyChime();
               confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
+              notifyOrderStatus(updatedOrder.order_number || updatedOrder.orderId || 'Active', 'READY');
             }
+
             return { ...curr, ...updatedOrder };
           }
           return curr;

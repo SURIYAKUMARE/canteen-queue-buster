@@ -26,6 +26,7 @@ import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import OrderSuccessModal from './components/OrderSuccessModal';
 import LiveOrderVendorModal from './components/LiveOrderVendorModal';
 import NotificationToaster from './components/NotificationToaster';
+import { ToastProvider } from './components/ui/ToastContext';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -169,13 +170,16 @@ function AppModals() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <CampusProvider>
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-amber-500 selection:text-slate-950">
-          <TopBar />
-          <MainView />
-          <AppModals />
-        </div>
-      </CampusProvider>
+      <ToastProvider>
+        <CampusProvider>
+          <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-amber-500 selection:text-slate-950">
+            <TopBar />
+            <MainView />
+            <AppModals />
+          </div>
+        </CampusProvider>
+      </ToastProvider>
     </ErrorBoundary>
   );
 }
+

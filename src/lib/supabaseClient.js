@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Read from Vite environment or user-configured localStorage override
-const envUrl = import.meta.env.VITE_SUPABASE_URL;
-const envAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const envUrl = (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process?.env?.VITE_SUPABASE_URL) || '';
+const envAnonKey = (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process?.env?.VITE_SUPABASE_ANON_KEY) || '';
 
 const localUrl = typeof window !== 'undefined' ? localStorage.getItem('CAMPUSBITE_SUPABASE_URL') : null;
 const localAnonKey = typeof window !== 'undefined' ? localStorage.getItem('CAMPUSBITE_SUPABASE_ANON_KEY') : null;

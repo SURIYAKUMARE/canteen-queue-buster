@@ -1,6 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCampus } from '../context/CampusContext';
-import { Search, Filter, Plus, Minus, Star, Clock, Flame, ArrowRight, ShoppingBag } from 'lucide-react';
+import { 
+  Search, 
+  Plus, 
+  Minus, 
+  Star, 
+  Clock, 
+  ArrowRight, 
+  ShoppingBag, 
+  Heart, 
+  UtensilsCrossed 
+} from 'lucide-react';
+import { EmptyState } from './ui';
+import { useToast } from './ui/ToastContext';
+
+const FAVORITES_STORAGE_KEY = 'CAMPUSBITE_FAVORITES_V2';
 
 export default function StudentMenu() {
   const { 
@@ -13,16 +27,54 @@ export default function StudentMenu() {
     setSelectedFoodDetail, 
     initiateCheckout 
   } = useCampus();
+  const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('All');
   const [vegOnly, setVegOnly] = useState(false);
 
-  const categories = ['All', 'Breakfast', 'Lunch', 'Snacks', 'Drinks', 'Combos'];
+  // Favorites state
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleFavorite = (itemId, e) => {
+    if (e) e.stopPropagation();
+    setFavorites(prev => {
+      const isFav = prev.includes(itemId);
+      const next = isFav ? prev.filter(id => id !== itemId) : [...prev, itemId];
+      try {
+        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next));
+      } catch (err) {
+        console.warn('Failed saving favorites to localStorage:', err);
+      }
+      if (!isFav) {
+        toast.success('Added to your Favorites! ❤️');
+      } else {
+        toast.info('Removed from Favorites');
+      }
+      return next;
+    });
+  };
+
+  const categories = ['All', 'Favorites', 'Breakfast', 'Lunch', 'Snacks', 'Drinks', 'Combos'];
 
   const filtered = (menu || []).filter(item => {
     if (!item) return false;
-    const matchCat = selectedCat === 'All' || item.category === selectedCat;
+    
+    // Category match or Favorites filter
+    let matchCat = true;
+    if (selectedCat === 'Favorites') {
+      matchCat = favorites.includes(item.id);
+    } else if (selectedCat !== 'All') {
+      matchCat = item.category === selectedCat;
+    }
+
     const isVegItem = item.isVeg !== false && item.is_veg !== false;
     const matchVeg = !vegOnly || isVegItem;
     const name = (item.name || '').toLowerCase();
@@ -55,19 +107,30 @@ export default function StudentMenu() {
         {/* Category selector & Veg switch */}
         <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar py-1">
           <div className="flex items-center gap-1.5">
-            {categories.map((c) => (
-              <button
-                key={c}
-                onClick={() => setSelectedCat(c)}
-                className={`text-[11px] font-bold px-3 py-1.5 rounded-xl whitespace-nowrap transition ${
-                  selectedCat === c
-                    ? 'bg-orange-500 text-white shadow-sm'
-                    : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
+            {categories.map((c) => {
+              const isFavCat = c === 'Favorites';
+              const isSelected = selectedCat === c;
+
+              return (
+                <button
+                  key={c}
+                  onClick={() => setSelectedCat(c)}
+                  className={`text-[11px] font-bold px-3 py-1.5 rounded-xl whitespace-nowrap transition flex items-center gap-1 ${
+                    isSelected
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 shadow-md font-black'
+                      : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {isFavCat && <Heart className={`w-3 h-3 ${isSelected ? 'fill-slate-950 text-slate-950' : 'text-rose-400'}`} />}
+                  <span>{c}</span>
+                  {isFavCat && favorites.length > 0 && (
+                    <span className="text-[10px] px-1 bg-black/20 rounded-full font-mono">
+                      {favorites.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <button
@@ -87,9 +150,15 @@ export default function StudentMenu() {
       {/* Items list */}
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <div className="text-center py-16 text-xs text-slate-500 bg-slate-900/50 rounded-3xl border border-slate-800">
-            No dishes match your filter.
-          </div>
+          <EmptyState
+            icon={selectedCat === 'Favorites' ? Heart : UtensilsCrossed}
+            title={selectedCat === 'Favorites' ? 'No favorites saved yet' : 'No dishes match your filter'}
+            description={
+              selectedCat === 'Favorites'
+                ? 'Tap the heart icon on any dish card to bookmark your campus favorites for 1-tap reordering.'
+                : 'Try adjusting your search query or selecting another food category.'
+            }
+          />
         ) : (
           filtered.map((item) => {
             const cartEntry = cart[item.id];
@@ -101,11 +170,12 @@ export default function StudentMenu() {
             const prepMins = item.prepTimeMinutes || item.prep_time || 5;
             const rating = item.rating || 4.8;
             const price = Number(item.price || 0);
+            const isFav = favorites.includes(item.id);
 
             return (
               <div
                 key={item.id}
-                className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-3.5 flex items-center gap-3.5 transition group"
+                className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-3.5 flex items-center gap-3.5 transition group relative"
               >
                 <div
                   onClick={() => setSelectedFoodDetail(item)}
@@ -119,6 +189,15 @@ export default function StudentMenu() {
                   <div className="absolute top-1.5 left-1.5 bg-slate-950/80 p-1 rounded-md">
                     <span className={`block w-2 h-2 rounded-full ${isVeg ? 'bg-emerald-400' : 'bg-rose-500'}`} />
                   </div>
+
+                  {/* Favorite Heart Button */}
+                  <button
+                    onClick={(e) => toggleFavorite(item.id, e)}
+                    className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-slate-950/70 backdrop-blur-sm text-slate-300 hover:text-white transition active:scale-90"
+                    title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-rose-500 text-rose-500' : 'text-slate-400 hover:text-rose-400'}`} />
+                  </button>
                 </div>
 
                 <div
@@ -205,7 +284,6 @@ export default function StudentMenu() {
             <button
               id="book-food-btn"
               onClick={() => {
-                console.log('CLICKED BOOK FOOD in StudentMenu!');
                 initiateCheckout();
               }}
               className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/30 flex items-center gap-2 transition active:scale-95 cursor-pointer"

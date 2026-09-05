@@ -1,21 +1,36 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCampus } from '../context/CampusContext';
 import { 
   Clock, 
   CheckCircle2, 
   QrCode, 
   ChefHat, 
-  PackageCheck, 
-  CreditCard, 
-  ArrowRight,
-  RotateCcw,
-  Sparkles,
-  ShoppingBag,
-  BellRing
+  ArrowRight, 
+  RotateCcw, 
+  ShoppingBag, 
+  Bell, 
+  Users, 
+  Flame, 
+  Sparkles 
 } from 'lucide-react';
+import { Button, Badge, EmptyState } from './ui';
+import { useToast } from './ui/ToastContext';
+import { requestNotificationPermission, isNotificationSupported } from '../utils/browserNotifications';
 
 export default function StudentOrders() {
-  const { orders, setActiveStudentOrder, setStudentTab, currentUser, studentUser, addToCart, setIsCartOpen } = useCampus();
+  const { 
+    orders, 
+    setActiveStudentOrder, 
+    setStudentTab, 
+    currentUser, 
+    studentUser, 
+    addToCart, 
+    setIsCartOpen 
+  } = useCampus();
+  const { toast } = useToast();
+  const [notifGranted, setNotifGranted] = useState(
+    typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted'
+  );
 
   const currentStudentId = currentUser?.student?.id || studentUser.id;
   const currentRollNo = currentUser?.student?.student_id || studentUser.rollNo;
@@ -27,32 +42,108 @@ export default function StudentOrders() {
   });
 
   const trackingSteps = [
-    { key: 'PLACED', label: 'Order Placed', desc: 'Received in queue' },
-    { key: 'PAID', label: 'Payment Successful', desc: '256-bit verified payment' },
+    { key: 'PLACED', label: 'Order Placed', desc: 'Received in kitchen queue' },
+    { key: 'PAID', label: 'Payment Confirmed', desc: 'Secure verified transaction' },
     { key: 'ACCEPTED', label: 'Order Accepted', desc: 'Kitchen acknowledged order' },
-    { key: 'PREPARING', label: 'Preparing', desc: 'Cooking fresh meals' },
-    { key: 'READY', label: 'Ready for Pickup', desc: 'Packed at counter bay' },
-    { key: 'COMPLETED', label: 'Completed', desc: 'QR scanned & food handed over' },
+    { key: 'PREPARING', label: 'Preparing Fresh', desc: 'Cooking meal at counter bay' },
+    { key: 'READY', label: 'Ready for Pickup', desc: 'Packed and waiting for you!' },
+    { key: 'COMPLETED', label: 'Picked Up', desc: 'QR scanned & order fulfilled' },
   ];
 
   const getStepProgressIndex = (status) => {
-    switch (status) {
+    switch (String(status).toUpperCase()) {
       case 'PENDING_PAYMENT': return 1;
       case 'PAID': return 2;
       case 'ACCEPTED': return 3;
       case 'PREPARING': return 4;
       case 'READY': return 5;
-      case 'COMPLETED': return 6;
+      case 'COMPLETED':
+      case 'COLLECTED': return 6;
       default: return 2;
     }
   };
 
-  const activeOrder = studentOrders.find(o => 
-    o.order_status !== 'COMPLETED' && 
-    o.orderStatus !== 'COMPLETED' && 
-    o.order_status !== 'CANCELLED' && 
-    o.orderStatus !== 'CANCELLED'
-  ) || studentOrders[0];
+  const activeOrder = studentOrders.find(o => {
+    const st = (o.order_status || o.orderStatus || '').toUpperCase();
+    return !['COMPLETED', 'COLLECTED', 'CANCELLED'].includes(st);
+  }) || studentOrders[0];
+
+  const activeOrderStatus = activeOrder ? (activeOrder.order_status || activeOrder.orderStatus || '').toUpperCase() : '';
+  const isActive = activeOrder && !['COMPLETED', 'COLLECTED', 'CANCELLED'].includes(activeOrderStatus);
+
+  // Calculate live queue position ahead of active order
+  const activeOrderCreated = new Date(activeOrder?.created_at || activeOrder?.createdAt || Date.now()).getTime();
+  const queueAhead = isActive ? orders.filter(o => {
+    const st = (o.order_status || o.orderStatus || '').toUpperCase();
+    if (!['PAID', 'ACCEPTED', 'PREPARING'].includes(st)) return false;
+    const oVendor = o.vendor_id || o.vendorId;
+    const activeVendor = activeOrder?.vendor_id || activeOrder?.vendorId;
+    if (activeVendor && oVendor && activeVendor !== oVendor) return false;
+    const oCreated = new Date(o.created_at || o.createdAt || 0).getTime();
+    return oCreated < activeOrderCreated;
+  }).length : 0;
+
+  const positionInQueue = queueAhead + 1;
+  const estimatedWaitMins = Math.max(2, positionInQueue * 4);
+
+  // 1-Tap Reorder handler
+  const handleReorder = (order) => {
+    const items = order.order_items || order.items || order.foodItems || [];
+    if (!items.length) {
+      toast.warning('No items found in this order receipt.');
+      return;
+    }
+
+    items.forEach(it => {
+      const foodItem = {
+        id: it.food_id || it.foodId || it.id,
+        name: it.food_name_snapshot || it.name || 'Canteen Item',
+        price: Number(it.price_snapshot || it.price || 0),
+        image: it.image || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300'
+      };
+      const qty = Number(it.quantity || 1);
+      for (let i = 0; i < qty; i++) {
+        addToCart(foodItem);
+      }
+    });
+
+    toast.success(`Re-added ${items.length} item(s) to your cart! 🛒`);
+    setIsCartOpen(true);
+  };
+
+  const handleEnableNotifications = async () => {
+    const res = await requestNotificationPermission();
+    if (res === 'granted') {
+      setNotifGranted(true);
+      toast.success('Pickup notifications enabled! We will ping you when ready.');
+    } else {
+      toast.info('Notifications not enabled.');
+    }
+  };
+
+  if (studentOrders.length === 0) {
+    return (
+      <div className="max-w-md mx-auto space-y-5 pb-20 px-4 text-white animate-fadeIn">
+        <div className="space-y-1">
+          <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+            <span>📦 My Orders & Live Tracking</span>
+          </h2>
+          <p className="text-xs text-slate-400">Real-time status updates powered by Supabase Realtime</p>
+        </div>
+
+        <EmptyState
+          icon={ShoppingBag}
+          title="No orders placed yet"
+          description="Explore our campus kitchen menu and pre-order fresh meals to beat the canteen rush!"
+          action={
+            <Button variant="primary" onClick={() => setStudentTab('menu')}>
+              Browse Menu & Order
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto space-y-5 pb-20 px-4 text-white animate-fadeIn">
@@ -77,18 +168,61 @@ export default function StudentOrders() {
                 setActiveStudentOrder(activeOrder);
                 setStudentTab('qr');
               }}
-              className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold px-3 py-1.5 rounded-xl transition font-mono"
+              className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold px-3 py-1.5 rounded-xl transition font-mono active:scale-95"
             >
               <QrCode className="w-3.5 h-3.5" />
               <span>Show QR</span>
             </button>
           </div>
 
+          {/* Live Queue Position Banner */}
+          {isActive && (
+            <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent border border-amber-500/30 rounded-2xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/40">
+                  {activeOrderStatus === 'READY' ? (
+                    <Sparkles className="w-5 h-5 text-emerald-400 animate-bounce" />
+                  ) : (
+                    <Users className="w-5 h-5 text-amber-400" />
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    {activeOrderStatus === 'READY' ? (
+                      <span className="text-emerald-400 font-extrabold">🎉 READY FOR PICKUP!</span>
+                    ) : (
+                      <>
+                        <span>Queue Position:</span>
+                        <span className="font-mono text-amber-400 font-black">#{positionInQueue} in line</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {activeOrderStatus === 'READY'
+                      ? 'Head to Counter Bay with your QR Pass'
+                      : `Estimated wait: ~${estimatedWaitMins} mins`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Notification opt-in prompt if not already enabled */}
+              {!notifGranted && isNotificationSupported() && (
+                <button
+                  onClick={handleEnableNotifications}
+                  className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 shrink-0"
+                  title="Notify me when ready"
+                >
+                  <Bell className="w-3 h-3" />
+                  <span>Notify Me</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Stepper Timeline */}
           <div className="py-2 space-y-3.5">
             {trackingSteps.map((step, idx) => {
-              const currentStatus = activeOrder.order_status || activeOrder.orderStatus;
-              const currentProgress = getStepProgressIndex(currentStatus);
+              const currentProgress = getStepProgressIndex(activeOrderStatus);
               const isDone = currentProgress > idx;
               const isCurrent = currentProgress === idx + 1;
 
@@ -100,7 +234,7 @@ export default function StudentOrders() {
                       className={`absolute left-3.5 top-6 w-0.5 h-8 transition-colors ${
                         isDone ? 'bg-amber-500' : 'bg-slate-800'
                       }`}
-                    ></div>
+                    />
                   )}
 
                   {/* Node icon */}
@@ -155,7 +289,7 @@ export default function StudentOrders() {
             const orderNum = order.order_number || order.orderId;
             const items = order.order_items || order.items || order.foodItems || [];
             const amount = Number(order.total_amount || order.totalAmount || 0);
-            const status = order.order_status || order.orderStatus || 'PAID';
+            const status = (order.order_status || order.orderStatus || 'PAID').toUpperCase();
 
             return (
               <div 
@@ -169,17 +303,11 @@ export default function StudentOrders() {
                       {order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}
                     </span>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    status === 'COMPLETED' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                    status === 'READY' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                    'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                  }`}>
-                    {status}
-                  </span>
+                  <Badge variant={status.toLowerCase()}>{status}</Badge>
                 </div>
 
                 {/* Items */}
-                <div className="space-y-1 text-xs text-slate-300">
+                <div className="space-y-1 text-xs text-slate-300 bg-slate-950/40 p-2 rounded-xl border border-slate-850">
                   {items.map((it, idx) => (
                     <div key={idx} className="flex justify-between">
                       <span className="text-slate-400">{it.quantity}× {it.food_name_snapshot || it.name}</span>
@@ -190,16 +318,28 @@ export default function StudentOrders() {
 
                 <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
                   <span className="text-xs font-bold text-amber-400 font-mono">₹{amount.toFixed(2)}</span>
-                  <button
-                    onClick={() => {
-                      setActiveStudentOrder(order);
-                      setStudentTab('qr');
-                    }}
-                    className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"
-                  >
-                    <span>View Pass</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* 1-Tap Reorder Button */}
+                    <button
+                      onClick={() => handleReorder(order)}
+                      className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition active:scale-95"
+                      title="Reorder items into cart"
+                    >
+                      <RotateCcw className="w-3 h-3 text-orange-400" />
+                      <span>Reorder</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setActiveStudentOrder(order);
+                        setStudentTab('qr');
+                      }}
+                      className="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1"
+                    >
+                      <span>View Pass</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

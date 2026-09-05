@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCampus } from '../context/CampusContext';
 import { 
   CheckCircle2, 
@@ -11,9 +11,12 @@ import {
   ShoppingBag,
   ArrowRight,
   Flame,
-  CheckCheck
+  CheckCheck,
+  Columns3,
+  ListFilter
 } from 'lucide-react';
 import { normalizeOrder } from '../utils/orderUtils.js';
+import VendorKanban from './VendorKanban';
 
 export default function VendorOrders() {
   const { 
@@ -46,21 +49,55 @@ export default function VendorOrders() {
   const getStatus = (o) => o.order_status || o.orderStatus || 'PAID';
   const getAmount = (o) => Number(o.total_amount || o.totalAmount || 0);
 
+  const [viewMode, setViewMode] = useState('kanban');
+
   const filteredOrders = vendorOrders.filter(o => {
     if (vendorOrderFilter === 'ALL') return true;
     return getStatus(o) === vendorOrderFilter;
   });
 
   return (
-    <div className="max-w-md mx-auto space-y-4 pb-24 px-4 text-white animate-fadeIn">
-      <div>
-        <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-          <span>📋 Order Management Pipeline</span>
-        </h2>
-        <p className="text-xs text-slate-400">Manage order preparation lifecycle connected to Supabase Realtime</p>
+    <div className={`mx-auto space-y-4 pb-24 px-4 text-white animate-fadeIn ${viewMode === 'kanban' ? 'max-w-4xl' : 'max-w-md'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+            <span>📋 Order Pipeline</span>
+          </h2>
+          <p className="text-xs text-slate-400">Live order lifecycle connected to Supabase Realtime</p>
+        </div>
+
+        {/* View Mode Toggle: Kanban vs List */}
+        <div className="bg-slate-900 border border-slate-800 p-1 rounded-2xl flex items-center gap-1 shadow-inner shrink-0">
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+              viewMode === 'kanban'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Columns3 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Kanban</span>
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+              viewMode === 'list'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <ListFilter className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">List</span>
+          </button>
+        </div>
       </div>
 
-      {/* Filter Tabs */}
+      {viewMode === 'kanban' ? (
+        <VendorKanban />
+      ) : (
+        <>
+
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
         {tabs.map((tab) => {
           const count = tab === 'ALL' 
@@ -247,6 +284,9 @@ export default function VendorOrders() {
           })
         )}
       </div>
+      </>
+      )}
     </div>
   );
+
 }
