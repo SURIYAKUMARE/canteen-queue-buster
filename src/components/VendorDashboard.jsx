@@ -24,6 +24,7 @@ export default function VendorDashboard() {
     acceptOrder,
     startPrepOrder,
     markOrderReady,
+    completeOrderHandover,
     currentUser
   } = useCampus();
 
@@ -265,6 +266,15 @@ export default function VendorDashboard() {
                         className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition"
                       >
                         Mark Ready
+                      </button>
+                    )}
+                    {status === 'READY' && (
+                      <button
+                        onClick={() => completeOrderHandover(order.id || orderId)}
+                        className="py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-black text-xs transition flex items-center gap-1 shadow-md cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Hand Over ✓</span>
                       </button>
                     )}
                   </div>

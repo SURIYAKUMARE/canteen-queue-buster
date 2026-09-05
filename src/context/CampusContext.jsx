@@ -369,6 +369,30 @@ export function CampusProvider({ children }) {
     }
   };
 
+  // Vendor Action: Complete Food Handover (READY -> COMPLETED)
+  const completeOrderHandover = async (orderId) => {
+    try {
+      const updated = await databaseService.confirmFoodHandover(orderId);
+      setOrders(prev => prev.map(o => (o.id === orderId || o.order_number === orderId) ? { ...o, ...updated } : o));
+      playSuccessChime();
+      try {
+        confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
+      } catch (e) {}
+
+      addNotification({
+        targetRole: 'student',
+        title: 'Food Handed Over Successfully! 🍽️',
+        message: `Your order #${updated.order_number || orderId} has been collected. Enjoy your meal!`,
+        type: 'collected',
+        orderId: updated.order_number
+      });
+      fetchOrders();
+      return updated;
+    } catch (err) {
+      alert('Failed to complete handover: ' + err.message);
+    }
+  };
+
   // Vendor Action: Menu Management
   const addFoodItem = async (foodData) => {
     try {
@@ -515,6 +539,7 @@ export function CampusProvider({ children }) {
     startPrepOrder,
     rejectOrder,
     markOrderReady,
+    completeOrderHandover,
 
     // Modals
     liveVendorOrderPopup,

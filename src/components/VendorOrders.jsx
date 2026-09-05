@@ -23,6 +23,7 @@ export default function VendorOrders() {
     startPrepOrder,
     rejectOrder, 
     markOrderReady, 
+    completeOrderHandover,
     setVendorTab,
     currentUser,
     vendorUser
@@ -211,15 +212,25 @@ export default function VendorOrders() {
                       </button>
                     )}
 
-                    {/* READY -> SCANNER */}
+                    {/* READY -> SCANNER OR DIRECT HANDOVER */}
                     {status === 'READY' && (
-                      <button
-                        onClick={() => setVendorTab('scan')}
-                        className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md"
-                      >
-                        <ScanLine className="w-3.5 h-3.5" />
-                        <span>Scan QR & Complete</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setVendorTab('scan')}
+                          className="bg-slate-800 hover:bg-slate-750 text-emerald-300 border border-emerald-500/40 font-bold text-xs px-2.5 py-2 rounded-xl transition flex items-center gap-1 shadow-sm cursor-pointer"
+                          title="Open Camera Scanner"
+                        >
+                          <ScanLine className="w-3.5 h-3.5" />
+                          <span>Scan QR</span>
+                        </button>
+                        <button
+                          onClick={() => completeOrderHandover(orderId)}
+                          className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-black text-xs px-3 py-2 rounded-xl transition flex items-center gap-1 shadow-md cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>Hand Over ✓</span>
+                        </button>
+                      </div>
                     )}
 
                     {status === 'COMPLETED' && (
