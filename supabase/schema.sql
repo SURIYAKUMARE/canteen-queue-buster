@@ -47,9 +47,9 @@ CREATE TABLE IF NOT EXISTS public.vendors (
     profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     vendor_id TEXT UNIQUE NOT NULL, -- e.g. VEN001
     vendor_name TEXT NOT NULL,
-    canteen_name TEXT NOT NULL,
+    canteen_name TEXT NOT NULL DEFAULT 'Campus Central Canteen',
     phone TEXT,
-    canteen_details TEXT,
+    canteen_details TEXT DEFAULT 'Bay 1 (Express) & Bay 2 (Hot Meals)',
     upi_id TEXT DEFAULT 'canteen@okhdfcbank',
     upi_qr_url TEXT, -- Configurable GPay/UPI QR Image uploaded by owner/vendor
     password_hash TEXT,
@@ -388,8 +388,20 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
 
     -- Insert default vendor record if not exists
-    INSERT INTO public.vendors (id, profile_id, vendor_id, vendor_name, phone, is_active)
-    VALUES (v_vendor_id, v_profile_id, 'VEN001', 'Campus Central Canteen', '+91 98765 00001', true)
+    INSERT INTO public.vendors (id, profile_id, vendor_id, vendor_name, canteen_name, phone, canteen_details, upi_id, upi_qr_url, password_hash, is_active)
+    VALUES (
+        v_vendor_id, 
+        v_profile_id, 
+        'VEN001', 
+        'Campus Central Canteen', 
+        'Campus Central Canteen', 
+        '+91 98765 00001', 
+        'Bay 1 (Express) & Bay 2 (Hot Meals)', 
+        'canteen@okhdfcbank', 
+        'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi%3A%2F%2Fpay%3Fpa%3Dcanteen%40okhdfcbank%26pn%3DCampus%2BCentral%2BCanteen%26cu%3DINR', 
+        'vendor123', 
+        true
+    )
     ON CONFLICT (id) DO NOTHING;
 
     -- Insert demo student profile if not exists
@@ -398,8 +410,19 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
 
     -- Insert demo student record if not exists
-    INSERT INTO public.students (id, profile_id, student_id, college_email, phone)
-    VALUES (s_student_id, s_profile_id, 'STU001', 'stu001@college.edu', '+91 98765 43210')
+    INSERT INTO public.students (id, profile_id, student_id, college_name, department, year, section, college_email, phone, password_hash)
+    VALUES (
+        s_student_id, 
+        s_profile_id, 
+        'STU001', 
+        'Campus College of Engineering', 
+        'Computer Science', 
+        '3rd Year', 
+        'A', 
+        'stu001@college.edu', 
+        '+91 98765 43210', 
+        'student123'
+    )
     ON CONFLICT (id) DO NOTHING;
 
     -- Seed food items
