@@ -131,10 +131,11 @@ async function runE2ETest() {
   await new Promise(r => setTimeout(r, 2500));
 
   const qrText = await page.evaluate(() => document.body.innerText);
+  console.log('DEBUG qrText:\n', qrText.slice(0, 500));
   if (qrText.includes('Payment Successful') && qrText.includes('Order Confirmed')) {
     console.log('✓ PASS: "Payment Successful ✓ • Order Confirmed ✓" displayed');
   } else {
-    throw new Error('FAIL: Payment confirmation header missing');
+    throw new Error('FAIL: Payment confirmation header missing: ' + qrText.slice(0, 300));
   }
 
   if (qrText.includes('ORD') && qrText.includes('TKN')) {

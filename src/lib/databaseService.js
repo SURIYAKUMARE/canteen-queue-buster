@@ -619,16 +619,18 @@ export const databaseService = {
   // --------------------------------------------------------------------------
   async getFoodItems() {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('food_items')
-        .select('*')
-        .order('category')
-        .order('name');
-      if (error) throw error;
-      return data;
-    } else {
-      return getLocalTable('food_items', DEFAULT_FOOD_ITEMS);
+      try {
+        const { data, error } = await supabase
+          .from('food_items')
+          .select('*')
+          .order('category')
+          .order('name');
+        if (!error && data && data.length > 0) return data;
+      } catch (e) {
+        console.warn('Supabase getFoodItems fallback:', e.message);
+      }
     }
+    return getLocalTable('food_items', DEFAULT_FOOD_ITEMS);
   },
 
   async addFoodItem(itemData, vendorId) {
@@ -647,53 +649,62 @@ export const databaseService = {
     };
 
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('food_items').insert([newItem]).select().single();
-      if (error) throw error;
-      return data;
-    } else {
-      const items = getLocalTable('food_items');
-      items.unshift(newItem);
-      setLocalTable('food_items', items);
-      realtimeEmitter.emit('FOOD_ITEMS_CHANGED', items);
-      return newItem;
+      try {
+        const { data, error } = await supabase.from('food_items').insert([newItem]).select().single();
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Supabase addFoodItem fallback:', e.message);
+      }
     }
+
+    const items = getLocalTable('food_items');
+    items.unshift(newItem);
+    setLocalTable('food_items', items);
+    realtimeEmitter.emit('FOOD_ITEMS_CHANGED', items);
+    return newItem;
   },
 
   async updateFoodItem(itemId, updates) {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('food_items')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', itemId)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    } else {
-      const items = getLocalTable('food_items');
-      const idx = items.findIndex(it => it.id === itemId);
-      if (idx !== -1) {
-        items[idx] = { ...items[idx], ...updates, updated_at: new Date().toISOString() };
-        setLocalTable('food_items', items);
-        realtimeEmitter.emit('FOOD_ITEMS_CHANGED', items);
-        return items[idx];
+      try {
+        const { data, error } = await supabase
+          .from('food_items')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', itemId)
+          .select()
+          .single();
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Supabase updateFoodItem fallback:', e.message);
       }
-      throw new Error('Food item not found.');
     }
+
+    const items = getLocalTable('food_items');
+    const idx = items.findIndex(it => it.id === itemId);
+    if (idx !== -1) {
+      items[idx] = { ...items[idx], ...updates, updated_at: new Date().toISOString() };
+      setLocalTable('food_items', items);
+      realtimeEmitter.emit('FOOD_ITEMS_CHANGED', items);
+      return items[idx];
+    }
+    throw new Error('Food item not found.');
   },
 
   async deleteFoodItem(itemId) {
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('food_items').delete().eq('id', itemId);
-      if (error) throw error;
-      return true;
-    } else {
-      let items = getLocalTable('food_items');
-      items = items.filter(it => it.id !== itemId);
-      setLocalTable('food_items', items);
-      realtimeEmitter.emit('FOOD_ITEMS_CHANGED', items);
-      return true;
+      try {
+        const { error } = await supabase.from('food_items').delete().eq('id', itemId);
+        if (!error) return true;
+      } catch (e) {
+        console.warn('Supabase deleteFoodItem fallback:', e.message);
+      }
     }
+
+    let items = getLocalTable('food_items');
+    items = items.filter(it => it.id !== itemId);
+    setLocalTable('food_items', items);
+    realtimeEmitter.emit('FOOD_ITEMS_CHANGED', items);
+    return true;
   },
 
   // --------------------------------------------------------------------------
