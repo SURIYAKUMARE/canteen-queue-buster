@@ -128,6 +128,58 @@ const DEFAULT_FOOD_ITEMS = initialCampusMenu.map((m, idx) => ({
   updated_at: new Date().toISOString()
 }));
 
+// Transform seed orders to match Supabase schema safely
+export const DEFAULT_ORDERS = (initialSeedOrders || []).map((ord, idx) => {
+  const orderItems = ord.foodItems || ord.items || [];
+  const orderNum = ord.orderId || ord.orderNumber || `ORD100${idx + 1}`;
+  const tokenNum = ord.tokenNumber || (idx === 1 ? 'TKN876' : `TKN24${idx + 5}`);
+  const amount = Number(ord.totalAmount) || 100;
+  const status = ord.orderStatus || ord.status || 'PAID';
+
+  return {
+    id: `ord-uuid-${idx + 1}`,
+    order_number: orderNum,
+    orderId: orderNum,
+    token_number: tokenNum,
+    tokenNumber: tokenNum,
+    student_id: DEFAULT_STUDENTS[0].id,
+    studentId: ord.studentId || 'STU001',
+    studentName: ord.studentName || 'Arun Kumar',
+    vendor_id: DEFAULT_VENDORS[0].id,
+    subtotal: amount,
+    total_amount: amount,
+    totalAmount: amount,
+    payment_status: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+    paymentStatus: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
+    order_status: status,
+    orderStatus: status,
+    qr_token: ord.qrToken || `SEC-TOK-${1000 + idx + 1}`,
+    qr_generated_at: new Date().toISOString(),
+    qr_scanned_at: status === 'COMPLETED' ? new Date().toISOString() : null,
+    notes: ord.notes || '',
+    created_at: new Date(Date.now() - (idx * 20 * 60 * 1000)).toISOString(),
+    updated_at: new Date().toISOString(),
+    items: orderItems.map(it => ({
+      id: `oi-${Math.random().toString(36).substring(2, 8)}`,
+      name: it.name,
+      food_name_snapshot: it.name,
+      quantity: it.quantity || 1,
+      price: it.price || 50,
+      price_snapshot: it.price || 50,
+      subtotal: (it.price || 50) * (it.quantity || 1)
+    })),
+    foodItems: orderItems.map(it => ({
+      id: `oi-${Math.random().toString(36).substring(2, 8)}`,
+      name: it.name,
+      food_name_snapshot: it.name,
+      quantity: it.quantity || 1,
+      price: it.price || 50,
+      price_snapshot: it.price || 50,
+      subtotal: (it.price || 50) * (it.quantity || 1)
+    }))
+  };
+});
+
 // Initialize local storage with resilient demo data
 if (typeof window !== 'undefined') {
   if (!localStorage.getItem(STORAGE_PREFIX + 'food_items')) {
@@ -138,58 +190,27 @@ if (typeof window !== 'undefined') {
   setLocalTable('vendors', DEFAULT_VENDORS);
   setLocalTable('students', DEFAULT_STUDENTS);
 
-  // Transform seed orders to match Supabase schema safely
-  const seed = (initialSeedOrders || []).map((ord, idx) => {
-    const orderItems = ord.foodItems || ord.items || [];
-    const orderNum = ord.orderId || ord.orderNumber || `ORD100${idx + 1}`;
-    const tokenNum = ord.tokenNumber || `TKN24${idx + 5}`;
-    const amount = Number(ord.totalAmount) || 100;
-    const status = ord.orderStatus || ord.status || 'PAID';
-
-    return {
-      id: `ord-uuid-${idx + 1}`,
-      order_number: orderNum,
-      orderId: orderNum,
-      token_number: tokenNum,
-      tokenNumber: tokenNum,
-      student_id: DEFAULT_STUDENTS[0].id,
-      studentId: ord.studentId || 'STU001',
-      studentName: ord.studentName || 'Arun Kumar',
-      vendor_id: DEFAULT_VENDORS[0].id,
-      subtotal: amount,
-      total_amount: amount,
-      totalAmount: amount,
-      payment_status: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
-      paymentStatus: ord.paymentStatus === 'PAID' ? 'PAID' : 'PENDING',
-      order_status: status,
-      orderStatus: status,
-      qr_token: ord.qrToken || `SEC-TOK-${1000 + idx + 1}`,
-      qr_generated_at: new Date().toISOString(),
-      qr_scanned_at: status === 'COMPLETED' ? new Date().toISOString() : null,
-      notes: ord.notes || '',
-      created_at: new Date(Date.now() - (idx * 20 * 60 * 1000)).toISOString(),
-      updated_at: new Date().toISOString(),
-      items: orderItems.map(it => ({
-        id: `oi-${Math.random().toString(36).substring(2, 8)}`,
-        name: it.name,
-        food_name_snapshot: it.name,
-        quantity: it.quantity || 1,
-        price: it.price || 50,
-        price_snapshot: it.price || 50,
-        subtotal: (it.price || 50) * (it.quantity || 1)
-      })),
-      foodItems: orderItems.map(it => ({
-        id: `oi-${Math.random().toString(36).substring(2, 8)}`,
-        name: it.name,
-        food_name_snapshot: it.name,
-        quantity: it.quantity || 1,
-        price: it.price || 50,
-        price_snapshot: it.price || 50,
-        subtotal: (it.price || 50) * (it.quantity || 1)
-      }))
-    };
-  });
-  setLocalTable('orders', seed);
+  const existingOrders = getLocalTable('orders', []);
+  if (!existingOrders || existingOrders.length === 0) {
+    setLocalTable('orders', DEFAULT_ORDERS);
+  } else {
+    let modified = false;
+    DEFAULT_ORDERS.forEach(demoOrd => {
+      const found = existingOrders.some(o => 
+        (o.token_number && o.token_number === demoOrd.token_number) ||
+        (o.tokenNumber && o.tokenNumber === demoOrd.tokenNumber) ||
+        (o.order_number && o.order_number === demoOrd.order_number) ||
+        (o.orderId && o.orderId === demoOrd.orderId)
+      );
+      if (!found) {
+        existingOrders.push(demoOrd);
+        modified = true;
+      }
+    });
+    if (modified) {
+      setLocalTable('orders', existingOrders);
+    }
+  }
 }
 
 // ============================================================================
@@ -822,7 +843,8 @@ export const databaseService = {
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.from('payments').insert([paymentRow]);
-        const { data, error } = await supabase
+        const isValidUUID = (v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
+        let ordQuery = supabase
           .from('orders')
           .update({
             payment_status: 'PAID',
@@ -830,10 +852,13 @@ export const databaseService = {
             qr_token: qrToken,
             qr_generated_at: paidAt,
             updated_at: paidAt
-          })
-          .or(`id.eq.${orderId},order_number.eq.${orderId}`)
-          .select('*, order_items(*), students(*)')
-          .maybeSingle();
+          });
+        if (isValidUUID(orderId)) {
+          ordQuery = ordQuery.eq('id', orderId);
+        } else {
+          ordQuery = ordQuery.or(`order_number.eq.${orderId},token_number.eq.${orderId}`);
+        }
+        const { data, error } = await ordQuery.select('*, order_items(*), students(*)').maybeSingle();
         if (!error && data) updatedOrder = data;
       } catch (e) {
         console.warn('Supabase completePayment fallback:', e.message);
@@ -886,7 +911,7 @@ export const databaseService = {
       }
     }
 
-    let orders = getLocalTable('orders', []);
+    let orders = getLocalTable('orders', DEFAULT_ORDERS);
     if (filter.studentId) {
       const sId = String(filter.studentId).toLowerCase();
       orders = orders.filter(o => 
@@ -922,20 +947,28 @@ export const databaseService = {
         if (newStatus === 'COMPLETED') {
           updates.qr_scanned_at = updatedAt;
         }
-        const { data, error } = await supabase
-          .from('orders')
-          .update(updates)
-          .or(`id.eq.${orderId},order_number.eq.${orderId}`)
-          .select('*, order_items(*), students(*)')
-          .maybeSingle();
+        const isValidUUID = (v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
+        let updQuery = supabase.from('orders').update(updates);
+        if (isValidUUID(orderId)) {
+          updQuery = updQuery.eq('id', orderId);
+        } else {
+          updQuery = updQuery.or(`order_number.eq.${orderId},token_number.eq.${orderId}`);
+        }
+        const { data, error } = await updQuery.select('*, order_items(*), students(*)').maybeSingle();
         if (!error && data) updatedOrder = data;
       } catch (e) {
         console.warn('Supabase updateOrderStatus fallback:', e.message);
       }
     }
 
-    const orders = getLocalTable('orders', []);
-    const idx = orders.findIndex(o => o.id === orderId || o.order_number === orderId || o.orderId === orderId);
+    const orders = getLocalTable('orders', DEFAULT_ORDERS);
+    const idx = orders.findIndex(o => 
+      o.id === orderId || 
+      o.order_number === orderId || 
+      o.orderId === orderId ||
+      o.token_number === orderId ||
+      o.tokenNumber === orderId
+    );
     if (idx !== -1) {
       orders[idx] = {
         ...orders[idx],
@@ -956,62 +989,126 @@ export const databaseService = {
   // QR CODE VALIDATION & REDEMPTION (VENDOR CAMERA SCANNER)
   // --------------------------------------------------------------------------
   async verifyQRCode({ orderId, qrToken, tokenNumber, rawPayload, vendorId }) {
-    let targetOrderId = orderId;
-    let targetTokenNumber = tokenNumber;
-    let targetQrToken = qrToken;
+    let targetOrderId = orderId ? String(orderId).trim() : '';
+    let targetTokenNumber = tokenNumber ? String(tokenNumber).trim() : '';
+    let targetQrToken = qrToken ? String(qrToken).trim() : '';
+    let rawSearchTerm = '';
 
-    if (rawPayload && typeof rawPayload === 'string') {
-      try {
-        const parsed = JSON.parse(rawPayload);
-        if (parsed.orderId || parsed.orderNumber) targetOrderId = parsed.orderId || parsed.orderNumber;
-        if (parsed.tokenNumber) targetTokenNumber = parsed.tokenNumber;
-        if (parsed.token || parsed.qrToken) targetQrToken = parsed.token || parsed.qrToken;
-      } catch (e) {
-        if (!targetOrderId) targetOrderId = rawPayload.trim();
+    if (rawPayload) {
+      if (typeof rawPayload === 'object') {
+        if (rawPayload.orderId || rawPayload.orderNumber) targetOrderId = String(rawPayload.orderId || rawPayload.orderNumber).trim();
+        if (rawPayload.tokenNumber || rawPayload.token_number) targetTokenNumber = String(rawPayload.tokenNumber || rawPayload.token_number).trim();
+        if (rawPayload.token || rawPayload.qrToken) targetQrToken = String(rawPayload.token || rawPayload.qrToken).trim();
+      } else if (typeof rawPayload === 'string') {
+        const str = rawPayload.trim();
+        rawSearchTerm = str;
+        try {
+          const parsed = JSON.parse(str);
+          if (parsed && typeof parsed === 'object') {
+            if (parsed.orderId || parsed.orderNumber) targetOrderId = String(parsed.orderId || parsed.orderNumber).trim();
+            if (parsed.tokenNumber || parsed.token_number) targetTokenNumber = String(parsed.tokenNumber || parsed.token_number).trim();
+            if (parsed.token || parsed.qrToken) targetQrToken = String(parsed.token || parsed.qrToken).trim();
+          }
+        } catch (e) {
+          const clean = str.replace(/^#+/, '').trim();
+          if (/^TKN/i.test(clean)) {
+            targetTokenNumber = clean.toUpperCase();
+          } else if (/^ORD/i.test(clean)) {
+            targetOrderId = clean.toUpperCase();
+          } else {
+            targetTokenNumber = clean;
+            targetOrderId = clean;
+          }
+        }
       }
     }
+
+    const isValidUUID = (v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
+    const digitsOnly = (targetTokenNumber || targetOrderId || rawSearchTerm || '').replace(/\D/g, '');
 
     let order = null;
 
     if (isSupabaseConfigured && supabase) {
       try {
         let query = supabase.from('orders').select('*, order_items(*), students(*, profiles(*))');
-        if (targetOrderId && targetOrderId.startsWith('ORD')) {
-          query = query.eq('order_number', targetOrderId);
-        } else if (targetOrderId && targetOrderId.includes('-')) {
+
+        if (targetOrderId && isValidUUID(targetOrderId)) {
           query = query.eq('id', targetOrderId);
-        } else if (targetTokenNumber) {
-          query = query.eq('token_number', targetTokenNumber);
-        } else if (targetOrderId) {
-          query = query.or(`order_number.eq.${targetOrderId},id.eq.${targetOrderId}`);
+        } else {
+          const filters = [];
+          if (targetOrderId) {
+            filters.push(`order_number.ilike.%${targetOrderId.toUpperCase()}%`);
+            filters.push(`order_number.eq.${targetOrderId.toUpperCase()}`);
+          }
+          if (targetTokenNumber) {
+            filters.push(`token_number.ilike.%${targetTokenNumber.toUpperCase()}%`);
+            filters.push(`token_number.eq.${targetTokenNumber.toUpperCase()}`);
+          }
+          if (digitsOnly && digitsOnly.length >= 3) {
+            filters.push(`token_number.ilike.%${digitsOnly}%`);
+            filters.push(`order_number.ilike.%${digitsOnly}%`);
+          }
+          if (targetQrToken) {
+            filters.push(`qr_token.eq.${targetQrToken}`);
+          }
+
+          if (filters.length > 0) {
+            query = query.or(filters.join(','));
+          }
         }
-        const { data, error } = await query.maybeSingle();
-        if (!error && data) order = data;
+
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (!error && data) {
+          order = data;
+        }
       } catch (e) {
-        console.warn('Supabase verifyQRCode fallback:', e.message);
+        console.warn('Supabase verifyQRCode query fallback:', e.message);
       }
     }
 
     if (!order) {
-      const orders = getLocalTable('orders', []);
-      order = orders.find(o => 
-        (targetOrderId && (o.id === targetOrderId || o.order_number === targetOrderId || o.orderId === targetOrderId)) ||
-        (targetTokenNumber && (o.token_number === targetTokenNumber || o.tokenNumber === targetTokenNumber)) ||
-        (targetQrToken && o.qr_token === targetQrToken)
-      );
+      const orders = getLocalTable('orders', DEFAULT_ORDERS);
+      const normalize = (val) => String(val || '').trim().toUpperCase().replace(/^#+/, '');
+
+      const searchNormToken = normalize(targetTokenNumber);
+      const searchNormOrder = normalize(targetOrderId);
+      const searchNormRaw = normalize(rawSearchTerm);
+
+      order = orders.find(o => {
+        const ordToken = normalize(o.token_number || o.tokenNumber);
+        const ordNum = normalize(o.order_number || o.orderId);
+        const ordId = String(o.id || '').trim();
+        const ordQr = String(o.qr_token || '').trim();
+
+        if (searchNormToken && (ordToken === searchNormToken || ordToken === `TKN${searchNormToken}`)) return true;
+        if (searchNormOrder && (ordNum === searchNormOrder || ordNum === `ORD${searchNormOrder}`)) return true;
+        if (searchNormRaw && (ordToken === searchNormRaw || ordNum === searchNormRaw)) return true;
+        if (ordId === targetOrderId || ordId === rawSearchTerm) return true;
+        if (targetQrToken && ordQr === targetQrToken) return true;
+
+        if (digitsOnly && digitsOnly.length >= 3) {
+          if (ordToken.includes(digitsOnly) || ordNum.includes(digitsOnly)) return true;
+        }
+
+        return false;
+      });
     }
 
     if (!order) {
-      return { valid: false, reason: 'Invalid Order / QR: Order not found in database.' };
+      const displayKey = rawSearchTerm || targetTokenNumber || targetOrderId || 'provided code';
+      return { 
+        valid: false, 
+        reason: `Order or Token "${displayKey}" not found in database. Try active demo tokens: TKN876, TKN245, or ORD1001.` 
+      };
     }
 
     // 1. Payment validation
-    if (order.payment_status !== 'PAID') {
-      return { valid: false, reason: `Invalid Order / QR: Payment has not been completed. Status: ${order.payment_status}` };
+    if (order.payment_status !== 'PAID' && order.paymentStatus !== 'PAID') {
+      return { valid: false, reason: `Invalid Order / QR: Payment has not been completed. Status: ${order.payment_status || order.paymentStatus}` };
     }
 
     // 2. One-time redemption validation (Prevent Replay / Reuse)
-    if (order.order_status === 'COMPLETED' || order.qr_scanned_at) {
+    if (order.order_status === 'COMPLETED' || order.orderStatus === 'COMPLETED' || order.qr_scanned_at) {
       return {
         valid: false,
         isReused: true,
@@ -1019,7 +1116,7 @@ export const databaseService = {
       };
     }
 
-    if (order.order_status === 'CANCELLED') {
+    if (order.order_status === 'CANCELLED' || order.orderStatus === 'CANCELLED') {
       return { valid: false, reason: 'Invalid Order / QR: Order was cancelled or refunded.' };
     }
 
@@ -1047,23 +1144,35 @@ export const databaseService = {
   async confirmFoodHandover(orderId) {
     const updatedAt = new Date().toISOString();
     let updatedOrder = null;
+    const isValidUUID = (v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('orders')
-          .update({ order_status: 'COMPLETED', qr_scanned_at: updatedAt, updated_at: updatedAt })
-          .or(`id.eq.${orderId},order_number.eq.${orderId}`)
-          .select('*, order_items(*), students(*)')
-          .maybeSingle();
+          .update({ order_status: 'COMPLETED', qr_scanned_at: updatedAt, updated_at: updatedAt });
+
+        if (isValidUUID(orderId)) {
+          query = query.eq('id', orderId);
+        } else {
+          query = query.or(`order_number.eq.${orderId},token_number.eq.${orderId}`);
+        }
+
+        const { data, error } = await query.select('*, order_items(*), students(*)').maybeSingle();
         if (!error && data) updatedOrder = data;
       } catch (e) {
         console.warn('Supabase confirmFoodHandover fallback:', e.message);
       }
     }
 
-    const orders = getLocalTable('orders', []);
-    const idx = orders.findIndex(o => o.id === orderId || o.order_number === orderId || o.orderId === orderId);
+    const orders = getLocalTable('orders', DEFAULT_ORDERS);
+    const idx = orders.findIndex(o => 
+      o.id === orderId || 
+      o.order_number === orderId || 
+      o.orderId === orderId ||
+      o.token_number === orderId ||
+      o.tokenNumber === orderId
+    );
     if (idx !== -1) {
       orders[idx] = {
         ...orders[idx],

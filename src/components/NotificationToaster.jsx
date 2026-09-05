@@ -3,9 +3,11 @@ import { useCampus } from '../context/CampusContext';
 import { Bell, CheckCircle2, Clock, X, ChefHat, Sparkles } from 'lucide-react';
 
 export default function NotificationToaster() {
-  const { notifications, activeRole } = useCampus();
+  const { notifications, activeRole, currentUser } = useCampus();
 
-  // Show recent 3 notifications relevant to the active role
+  if (!currentUser) return null;
+
+  // Show recent 2 notifications relevant to the active role
   const relevantNotifs = notifications.filter(n => 
     activeRole === 'split' ? true : n.targetRole === activeRole
   ).slice(0, 2);

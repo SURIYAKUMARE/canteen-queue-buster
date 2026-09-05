@@ -73,17 +73,7 @@ export function CampusProvider({ children }) {
   const [liveVendorOrderPopup, setLiveVendorOrderPopup] = useState(null);
   const [orderSuccessModal, setOrderSuccessModal] = useState(null);
 
-  const [notifications, setNotifications] = useState([
-    {
-      id: 'notif-1',
-      targetRole: 'student',
-      title: 'Order Status Update',
-      message: 'Your order #CB-8491 is READY for pickup at Bay 1!',
-      time: '11:54 AM',
-      type: 'ready',
-      orderId: 'CB-8491'
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
   // Load Menu and Orders from Database
   const fetchMenu = useCallback(async () => {

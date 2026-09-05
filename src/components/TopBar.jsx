@@ -70,15 +70,20 @@ export default function TopBar() {
           )}
 
           {/* User Profile Badge */}
-          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold">
+          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 text-slate-200 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0">
             {isVendor ? (
-              <ChefHat className="w-3.5 h-3.5 text-indigo-400" />
+              <ChefHat className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
             ) : isAdmin ? (
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             ) : (
-              <GraduationCap className="w-3.5 h-3.5 text-amber-400" />
+              <GraduationCap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             )}
-            <span className="max-w-[140px] sm:max-w-[200px] truncate">
+            {/* Mobile: compact badge */}
+            <span className="sm:hidden font-mono font-bold text-xs text-white">
+              {isVendor ? (currentUser.vendor?.vendor_id || 'VEN001') : isAdmin ? 'Admin' : (currentUser.student?.student_id || 'STU001')}
+            </span>
+            {/* Tablet/Desktop: full text */}
+            <span className="hidden sm:inline max-w-[200px] truncate">
               {isVendor
                 ? `${currentUser.vendor?.canteen_name || currentUser.profile?.full_name || 'Central Canteen'} (${currentUser.vendor?.vendor_id || 'VEN001'})`
                 : isAdmin
@@ -92,7 +97,7 @@ export default function TopBar() {
             <button
               id="topbar-cart-btn"
               onClick={() => setIsCartOpen(true)}
-              className="relative p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition cursor-pointer"
+              className="relative p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition cursor-pointer shrink-0"
               title="Open Food Cart"
             >
               <ShoppingBag className="w-4 h-4" />
@@ -108,11 +113,11 @@ export default function TopBar() {
           <button
             id="switch-role-btn"
             onClick={handleLogout}
-            className="flex items-center gap-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
+            className="flex items-center gap-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
             title="Log out and return to role selection start screen"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Logout</span>
+            <span className="text-[11px] sm:text-xs">Logout</span>
           </button>
         </div>
       </div>

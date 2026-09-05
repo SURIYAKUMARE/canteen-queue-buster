@@ -127,6 +127,7 @@ function MainView() {
 
 function AppModals() {
   const {
+    currentUser,
     isPaymentModalOpen,
     setIsPaymentModalOpen,
     pendingCheckoutOrder,
@@ -160,7 +161,7 @@ function AppModals() {
       />
       <OrderSuccessModal />
       <LiveOrderVendorModal />
-      <NotificationToaster />
+      {currentUser && <NotificationToaster />}
     </>
   );
 }

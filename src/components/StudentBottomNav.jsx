@@ -23,6 +23,7 @@ export default function StudentBottomNav() {
           return (
             <button
               key={item.id}
+              id={`student-tab-${item.id}`}
               onClick={() => setStudentTab(item.id)}
               className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition relative ${
                 isActive ? 'text-orange-400' : 'text-slate-400 hover:text-slate-200'
