@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useCampus } from '../context/CampusContext';
-import { X, Clock, Flame, Star, Plus, Minus, ShoppingBag, Check } from 'lucide-react';
+import { X, Clock, Flame, Star, Plus, Minus, ShoppingBag, Check, Sparkles } from 'lucide-react';
+import { useToast } from './ui/ToastContext';
 
 export default function FoodDetailModal() {
-  const { selectedFoodDetail, setSelectedFoodDetail, addToCart } = useCampus();
+  const { selectedFoodDetail, setSelectedFoodDetail, addToCart, menu } = useCampus();
+  const { toast } = useToast();
   const [qty, setQty] = useState(1);
   const [cookingNotes, setCookingNotes] = useState('');
   const [addedAnimation, setAddedAnimation] = useState(false);
+
 
   if (!selectedFoodDetail) return null;
   const food = selectedFoodDetail;
@@ -103,8 +106,51 @@ export default function FoodDetailModal() {
             />
           </div>
 
+          {/* Frequently Paired With / Smart Upsell */}
+          {(() => {
+            const pairings = (menu || [])
+              .filter(m => m.id !== food.id && (m.available !== false && m.is_available !== false))
+              .filter(m => {
+                if (food.category === 'Drinks') return m.category === 'Snacks' || m.category === 'Breakfast';
+                return m.category === 'Drinks' || m.category === 'Snacks';
+              })
+              .slice(0, 2);
+
+            if (pairings.length === 0) return null;
+
+            return (
+              <div className="space-y-2 pt-2 border-t border-slate-800">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Frequently Paired Together:</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {pairings.map(p => (
+                    <div key={p.id} className="bg-slate-950/80 border border-slate-800 rounded-xl p-2 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <h5 className="text-[11px] font-bold text-white truncate">{p.name}</h5>
+                        <span className="text-[10px] font-mono text-amber-400">₹{p.price}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          addToCart(p, 1);
+                          toast.success(`Added ${p.name} to cart!`);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/30 text-[10px] font-bold shrink-0 transition active:scale-95 cursor-pointer"
+                      >
+                        + Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Quantity selector */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+
             <span className="text-xs font-bold text-slate-300">Select Quantity:</span>
             <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-2xl px-3 py-1.5">
               <button

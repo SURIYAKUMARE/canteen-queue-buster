@@ -26,7 +26,9 @@ import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import OrderSuccessModal from './components/OrderSuccessModal';
 import LiveOrderVendorModal from './components/LiveOrderVendorModal';
 import NotificationToaster from './components/NotificationToaster';
+import SplitScreenDemo from './components/SplitScreenDemo';
 import { ToastProvider } from './components/ui/ToastContext';
+
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -91,8 +93,12 @@ function MainView() {
     if (authFlow === 'admin_portal') {
       return <AdminPortal onBack={() => setAuthFlow('start')} />;
     }
+    if (authFlow === 'split_demo') {
+      return <SplitScreenDemo onBack={() => setAuthFlow('start')} />;
+    }
     return <StartScreen onSelectRole={(role) => setAuthFlow(role)} />;
   }
+
 
   // System Owner / Admin Portal
   if (currentUser?.profile?.role === 'admin') {

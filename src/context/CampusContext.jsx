@@ -3,8 +3,9 @@ import confetti from 'canvas-confetti';
 import { databaseService } from '../lib/databaseService.js';
 import { subscribeToOrders, subscribeToFoodItems } from '../lib/realtimeService.js';
 import { generateOrderQRCode } from '../utils/qrGenerator.js';
-import { playReadyChime, playSuccessChime } from '../utils/audioAlert.js';
+import { playReadyChime, playSuccessChime, playNewOrderAlert, announceOrderVoice } from '../utils/audioAlert.js';
 import { isSupabaseConfigured } from '../lib/supabaseClient.js';
+
 import { normalizeOrder } from '../utils/orderUtils.js';
 import { notifyOrderStatus } from '../utils/browserNotifications.js';
 
@@ -133,7 +134,13 @@ export function CampusProvider({ children }) {
 
         // Vendor live alert popup with guaranteed complete item breakdown
         setLiveVendorOrderPopup(orderWithItems);
-        playSuccessChime();
+        playNewOrderAlert();
+
+        const itemsSummary = (orderWithItems.order_items || orderWithItems.items || [])
+          .slice(0, 2)
+          .map(it => `${it.quantity} ${it.food_name_snapshot || it.name}`)
+          .join(', ');
+        announceOrderVoice(orderWithItems.order_number, orderWithItems.token_number, itemsSummary);
 
         // Add vendor notification
         addNotification({
@@ -143,6 +150,7 @@ export function CampusProvider({ children }) {
           type: 'new_order',
           orderId: orderWithItems.order_number
         });
+
 
         // Update orders list
         setOrders(prev => {

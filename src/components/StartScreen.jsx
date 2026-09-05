@@ -1,5 +1,6 @@
 import React from 'react';
-import { GraduationCap, ChefHat, ShieldAlert, ArrowRight } from 'lucide-react';
+import { GraduationCap, ChefHat, ShieldAlert, ArrowRight, Sparkles } from 'lucide-react';
+
 
 export default function StartScreen({ onSelectRole }) {
   return (
@@ -65,8 +66,24 @@ export default function StartScreen({ onSelectRole }) {
               </div>
               <ArrowRight className="w-5 h-5 text-indigo-400 group-hover:translate-x-1 transition-transform" />
             </button>
+
+            {/* LIVE SIDE-BY-SIDE SPLIT-SCREEN DEMO BUTTON */}
+            <button
+              id="start-split-demo-btn"
+              onClick={() => onSelectRole('split_demo')}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-blue-600/20 via-indigo-600/20 to-purple-600/20 hover:from-blue-600/30 hover:to-purple-600/30 text-blue-300 font-bold text-xs tracking-wide uppercase border border-blue-500/40 flex items-center justify-between transition-all transform active:scale-[0.98] group cursor-pointer shadow-lg shadow-blue-500/5"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-extrabold text-white">Live Split-Screen Demo</span>
+              </div>
+              <ArrowRight className="w-4 h-4 text-blue-400 group-hover:translate-x-1 transition-transform" />
+            </button>
           </div>
         </div>
+
 
         {/* Isolated System Owner / Admin Link */}
         <div className="pt-2 border-t border-slate-800/80">
