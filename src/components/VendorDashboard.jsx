@@ -23,14 +23,23 @@ export default function VendorDashboard() {
     vendorUser,
     acceptOrder,
     startPrepOrder,
-    markOrderReady
+    markOrderReady,
+    currentUser
   } = useCampus();
 
-  // IMPORTANT: Vendor should ONLY see paid orders
-  const paidOrders = (orders || []).filter(o => 
-    (o.payment_status === 'PAID' || o.paymentStatus === 'PAID') &&
-    (o.order_status !== 'CANCELLED' && o.orderStatus !== 'CANCELLED')
-  );
+  const currentVendorId = currentUser?.vendor?.id || vendorUser?.id;
+  const currentVendorCode = currentUser?.vendor?.vendor_id || 'VEN001';
+  const canteenName = currentUser?.vendor?.canteen_name || vendorUser?.name || 'Campus Central Canteen';
+  const canteenDetails = currentUser?.vendor?.canteen_details || vendorUser?.counterBay || 'Counter Bay 1 & 2';
+
+  // Vendor sees ONLY their canteen's paid orders
+  const paidOrders = (orders || []).filter(o => {
+    const vId = o.vendor_id || o.vendorId;
+    const isThisVendor = !vId || vId === currentVendorId || vId === currentVendorCode;
+    return isThisVendor &&
+      (o.payment_status === 'PAID' || o.paymentStatus === 'PAID') &&
+      (o.order_status !== 'CANCELLED' && o.orderStatus !== 'CANCELLED');
+  });
 
   const formatOrderTime = (order) => {
     if (order.createdAt && typeof order.createdAt === 'string' && !order.createdAt.includes('T')) {
@@ -73,8 +82,8 @@ export default function VendorDashboard() {
               <ChefHat className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="font-extrabold text-base text-white">Campus Central Canteen</h2>
-              <p className="text-[11px] text-slate-400 font-mono">Vendor ID: VEN001 • Counter Bay 1 & 2</p>
+              <h2 className="font-extrabold text-base text-white">{canteenName}</h2>
+              <p className="text-[11px] text-slate-400 font-mono">Vendor ID: {currentVendorCode} • {canteenDetails}</p>
             </div>
           </div>
 

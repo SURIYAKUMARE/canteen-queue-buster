@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CreditCard,
   QrCode,
@@ -22,10 +22,25 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
   console.log('>>> [PaymentModal] render, isOpen:', isOpen, 'pendingOrder:', pendingOrder);
   const { studentUser, setOrderSuccessModal, setActiveStudentOrder, addNotification, setStudentTab } = useCampus();
 
+  const [vendor, setVendor] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'wallet'
   const [upiId, setUpiId] = useState('student@okaxis');
   const [processing, setProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+
+  useEffect(() => {
+    if (!pendingOrder) return;
+    const loadVendor = async () => {
+      try {
+        const vId = pendingOrder.vendor_id || pendingOrder.vendorId;
+        const v = await databaseService.getVendorById(vId);
+        setVendor(v);
+      } catch (e) {
+        console.warn('Error loading vendor for payment:', e);
+      }
+    };
+    loadVendor();
+  }, [pendingOrder]);
 
   if (!isOpen || !pendingOrder) return null;
 
@@ -275,22 +290,50 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
           </div>
 
           {paymentMethod === 'upi' && (
-            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1.5">
-              <label className="text-xs text-slate-400">Enter Student UPI ID:</label>
-              <input
-                type="text"
-                value={upiId}
-                onChange={(e) => setUpiId(e.target.value)}
-                placeholder="username@bank"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs sm:text-sm font-mono text-slate-200 focus:outline-none focus:border-amber-500"
-              />
+            <div className="p-4 bg-slate-950 rounded-2xl border border-amber-500/30 space-y-3 text-center">
+              <div>
+                <span className="text-[10px] text-amber-400 font-mono font-bold uppercase tracking-wider block">
+                  Canteen Counter
+                </span>
+                <h4 className="font-extrabold text-sm text-white">
+                  {vendor?.canteen_name || vendor?.vendor_name || 'Campus Central Canteen'}
+                </h4>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  UPI ID: <strong className="text-slate-200">{vendor?.upi_id || 'canteen@okhdfcbank'}</strong>
+                </p>
+              </div>
+
+              {/* Vendor's Configured GPay / UPI QR Image */}
+              <div className="relative mx-auto w-44 h-44 sm:w-48 sm:h-48 bg-white p-2.5 rounded-2xl shadow-xl flex items-center justify-center border-2 border-amber-500/50">
+                <img
+                  src={
+                    vendor?.upi_qr_url ||
+                    `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
+                      `upi://pay?pa=${vendor?.upi_id || 'canteen@okhdfcbank'}&pn=${encodeURIComponent(
+                        vendor?.canteen_name || 'Campus Central Canteen'
+                      )}&am=${Number(pendingOrder.total_amount || pendingOrder.totalAmount || 0).toFixed(2)}&cu=INR`
+                    )}`
+                  }
+                  alt="Vendor Configured GPay QR"
+                  className="w-full h-full object-contain rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-amber-400 font-mono">
+                  Scan & Pay ₹{Number(pendingOrder.total_amount || pendingOrder.totalAmount || 0).toFixed(2)}
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Scan with Google Pay, PhonePe, Paytm, or any UPI app. Once paid, click <strong>PAYMENT COMPLETED</strong>.
+                </p>
+              </div>
             </div>
           )}
 
           <div className="p-3 bg-amber-500/5 rounded-xl border border-amber-500/20 text-[11px] text-slate-400 flex items-start gap-2">
             <ShieldCheck className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <span>
-              Secure simulated test flow: No bank details are saved. Clicking Pay updates the database to <strong>PAID</strong> and generates your unique dynamic pickup QR token.
+              Secure verification: Clicking <strong>PAYMENT COMPLETED</strong> records payment as <strong>PAID</strong> and generates your unique pickup QR pass.
             </span>
           </div>
         </div>
@@ -299,23 +342,26 @@ export function PaymentModal({ isOpen, onClose, pendingOrder, onPaymentSuccess }
         <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
           <div>
             <div className="text-[11px] text-slate-400">Amount to Pay:</div>
-            <div className="text-lg font-black text-amber-400">₹{Number(pendingOrder.total_amount || pendingOrder.totalAmount || 0).toFixed(2)}</div>
+            <div className="text-lg font-black text-amber-400 font-mono">
+              ₹{Number(pendingOrder.total_amount || pendingOrder.totalAmount || 0).toFixed(2)}
+            </div>
           </div>
 
           <button
+            id="payment-completed-btn"
             onClick={handleProcessPayment}
             disabled={processing}
-            className="flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            className="flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             {processing ? (
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                <span>Authorizing Payment...</span>
+                <span>Verifying Payment...</span>
               </div>
             ) : (
               <>
-                <Zap className="w-4 h-4" />
-                <span>Pay ₹{Number(pendingOrder.total_amount || pendingOrder.totalAmount || 0).toFixed(2)} Now</span>
+                <CheckCircle2 className="w-4 h-4" />
+                <span>PAYMENT COMPLETED</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}

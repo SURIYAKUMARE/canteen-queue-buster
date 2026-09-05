@@ -23,8 +23,19 @@ export default function VendorOrders() {
     startPrepOrder,
     rejectOrder, 
     markOrderReady, 
-    setVendorTab 
+    setVendorTab,
+    currentUser,
+    vendorUser
   } = useCampus();
+
+  const currentVendorId = currentUser?.vendor?.id || vendorUser?.id;
+  const currentVendorCode = currentUser?.vendor?.vendor_id || 'VEN001';
+
+  // Strictly filter orders belonging to this vendor
+  const vendorOrders = orders.filter(o => {
+    const vId = o.vendor_id || o.vendorId;
+    return !vId || vId === currentVendorId || vId === currentVendorCode;
+  });
 
   // Exactly as requested in prompt:
   // ALL, PAID, ACCEPTED, PREPARING, READY, COMPLETED, CANCELLED
@@ -33,7 +44,7 @@ export default function VendorOrders() {
   const getStatus = (o) => o.order_status || o.orderStatus || 'PAID';
   const getAmount = (o) => Number(o.total_amount || o.totalAmount || 0);
 
-  const filteredOrders = orders.filter(o => {
+  const filteredOrders = vendorOrders.filter(o => {
     if (vendorOrderFilter === 'ALL') return true;
     return getStatus(o) === vendorOrderFilter;
   });
@@ -51,8 +62,8 @@ export default function VendorOrders() {
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
         {tabs.map((tab) => {
           const count = tab === 'ALL' 
-            ? orders.length 
-            : orders.filter(o => getStatus(o) === tab).length;
+            ? vendorOrders.length 
+            : vendorOrders.filter(o => getStatus(o) === tab).length;
           const isSelected = vendorOrderFilter === tab;
 
           return (

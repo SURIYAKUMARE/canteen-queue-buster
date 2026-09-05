@@ -20,12 +20,10 @@ export default function StudentOrders() {
   const currentStudentId = currentUser?.student?.id || studentUser.id;
   const currentRollNo = currentUser?.student?.student_id || studentUser.rollNo;
 
-  // Filter orders for current student
+  // Filter orders strictly for current logged-in student
   const studentOrders = orders.filter(o => {
-    if (o.student_id === currentStudentId) return true;
-    if (o.studentId === currentRollNo) return true;
-    // Fallback: show recent if demo
-    return true;
+    const sId = o.student_id || o.studentId;
+    return sId === currentStudentId || sId === currentRollNo;
   });
 
   const trackingSteps = [

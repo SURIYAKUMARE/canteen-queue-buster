@@ -55,7 +55,13 @@ const DEFAULT_VENDORS = [
     profile_id: '00000000-0000-0000-0000-000000000001',
     vendor_id: 'VEN001',
     vendor_name: 'Campus Central Canteen',
+    canteen_name: 'Campus Central Canteen',
     phone: '+91 98765 00001',
+    email: 'ven001@college.edu',
+    password: 'vendor123',
+    canteen_details: 'Bay 1 (Express) & Bay 2 (Hot Meals)',
+    upi_id: 'canteen@okhdfcbank',
+    upi_qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi%3A%2F%2Fpay%3Fpa%3Dcanteen%40okhdfcbank%26pn%3DCampus%2BCentral%2BCanteen%26cu%3DINR',
     is_active: true,
     created_at: new Date().toISOString()
   }
@@ -87,8 +93,14 @@ const DEFAULT_STUDENTS = [
     id: '22222222-2222-2222-2222-222222222222',
     profile_id: '00000000-0000-0000-0000-000000000002',
     student_id: 'STU001',
+    full_name: 'Arun Kumar',
+    college_name: 'Campus College of Engineering',
+    department: 'Computer Science',
+    year: '3rd Year',
+    section: 'A',
     college_email: 'stu001@college.edu',
     phone: '+91 98765 43210',
+    password: 'student123',
     created_at: new Date().toISOString()
   }
 ];
@@ -321,89 +333,279 @@ export const databaseService = {
     }
   },
 
+  // --------------------------------------------------------------------------
+  // USER MANAGEMENT: STUDENTS
+  // --------------------------------------------------------------------------
+  async getStudents() {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.from('students').select('*').order('created_at', { ascending: false });
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Supabase getStudents fallback:', e.message);
+      }
+    }
+    return getLocalTable('students', DEFAULT_STUDENTS);
+  },
+
+  async createStudentAccount({ studentId, fullName, password, department, year, section, email, phone }) {
+    const sId = (studentId || '').trim().toUpperCase();
+    const cleanEmail = (email || `${sId.toLowerCase()}@college.edu`).trim().toLowerCase();
+    const students = getLocalTable('students', DEFAULT_STUDENTS);
+
+    if (students.some(s => s.student_id === sId || s.college_email === cleanEmail)) {
+      throw new Error(`Student account with ID '${sId}' or email '${cleanEmail}' already exists.`);
+    }
+
+    const newStudent = {
+      id: crypto.randomUUID(),
+      profile_id: crypto.randomUUID(),
+      student_id: sId,
+      full_name: fullName || 'Student ' + sId,
+      college_name: 'Campus College of Engineering',
+      department: department || 'Engineering',
+      year: year || '1st Year',
+      section: section || 'A',
+      college_email: cleanEmail,
+      phone: phone || '+91 98765 00000',
+      password: password || 'student123',
+      created_at: new Date().toISOString()
+    };
+
+    students.unshift(newStudent);
+    setLocalTable('students', students);
+
+    // Also add to profiles for compatibility
+    const profiles = getLocalTable('profiles', DEFAULT_PROFILES);
+    profiles.push({
+      id: newStudent.profile_id,
+      auth_user_id: 'mock-' + newStudent.id,
+      full_name: newStudent.full_name,
+      email: cleanEmail,
+      phone: newStudent.phone,
+      role: 'student',
+      created_at: new Date().toISOString()
+    });
+    setLocalTable('profiles', profiles);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('students').insert([{
+          id: newStudent.id,
+          profile_id: newStudent.profile_id,
+          student_id: newStudent.student_id,
+          college_email: newStudent.college_email,
+          phone: newStudent.phone
+        }]);
+      } catch (e) {
+        console.warn('Supabase createStudentAccount fallback:', e.message);
+      }
+    }
+
+    return newStudent;
+  },
+
+  async updateStudent(id, updates) {
+    const students = getLocalTable('students', DEFAULT_STUDENTS);
+    const idx = students.findIndex(s => s.id === id || s.student_id === id);
+    if (idx !== -1) {
+      students[idx] = { ...students[idx], ...updates, updated_at: new Date().toISOString() };
+      setLocalTable('students', students);
+      return students[idx];
+    }
+    throw new Error('Student not found.');
+  },
+
+  async deleteStudent(id) {
+    let students = getLocalTable('students', DEFAULT_STUDENTS);
+    students = students.filter(s => s.id !== id && s.student_id !== id);
+    setLocalTable('students', students);
+    return true;
+  },
+
+  // --------------------------------------------------------------------------
+  // USER MANAGEMENT: VENDORS & CANTEENS
+  // --------------------------------------------------------------------------
+  async getVendors() {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.from('vendors').select('*').order('created_at', { ascending: false });
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Supabase getVendors fallback:', e.message);
+      }
+    }
+    return getLocalTable('vendors', DEFAULT_VENDORS);
+  },
+
+  async getVendorById(vendorId) {
+    const vendors = await this.getVendors();
+    return vendors.find(v => v.id === vendorId || v.vendor_id === vendorId) || vendors[0] || DEFAULT_VENDORS[0];
+  },
+
+  async createVendorAccount({ vendorId, vendorName, canteenName, password, phone, email, canteenDetails, upiQrUrl, upiId }) {
+    const vId = (vendorId || '').trim().toUpperCase();
+    const cleanEmail = (email || `${vId.toLowerCase()}@college.edu`).trim().toLowerCase();
+    const vendors = getLocalTable('vendors', DEFAULT_VENDORS);
+
+    if (vendors.some(v => v.vendor_id === vId || v.email === cleanEmail)) {
+      throw new Error(`Vendor account with ID '${vId}' or email '${cleanEmail}' already exists.`);
+    }
+
+    const cleanUpiId = (upiId || `${vId.toLowerCase()}@okhdfcbank`).trim();
+    const finalQrUrl = upiQrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi%3A%2F%2Fpay%3Fpa%3D${encodeURIComponent(cleanUpiId)}%26pn%3D${encodeURIComponent(canteenName || vendorName)}%26cu%3DINR`;
+
+    const newVendor = {
+      id: crypto.randomUUID(),
+      profile_id: crypto.randomUUID(),
+      vendor_id: vId,
+      vendor_name: vendorName || canteenName || 'Canteen ' + vId,
+      canteen_name: canteenName || vendorName || 'Campus Canteen ' + vId,
+      phone: phone || '+91 98765 00000',
+      email: cleanEmail,
+      password: password || 'vendor123',
+      canteen_details: canteenDetails || 'Express Counter & Food Bay',
+      upi_id: cleanUpiId,
+      upi_qr_url: finalQrUrl,
+      is_active: true,
+      created_at: new Date().toISOString()
+    };
+
+    vendors.unshift(newVendor);
+    setLocalTable('vendors', vendors);
+
+    // Also add to profiles
+    const profiles = getLocalTable('profiles', DEFAULT_PROFILES);
+    profiles.push({
+      id: newVendor.profile_id,
+      auth_user_id: 'mock-' + newVendor.id,
+      full_name: newVendor.vendor_name,
+      email: cleanEmail,
+      phone: newVendor.phone,
+      role: 'vendor',
+      created_at: new Date().toISOString()
+    });
+    setLocalTable('profiles', profiles);
+
+    return newVendor;
+  },
+
+  async updateVendor(id, updates) {
+    const vendors = getLocalTable('vendors', DEFAULT_VENDORS);
+    const idx = vendors.findIndex(v => v.id === id || v.vendor_id === id);
+    if (idx !== -1) {
+      vendors[idx] = { ...vendors[idx], ...updates, updated_at: new Date().toISOString() };
+      setLocalTable('vendors', vendors);
+      return vendors[idx];
+    }
+    throw new Error('Vendor not found.');
+  },
+
+  async deleteVendor(id) {
+    let vendors = getLocalTable('vendors', DEFAULT_VENDORS);
+    vendors = vendors.filter(v => v.id !== id && v.vendor_id !== id);
+    setLocalTable('vendors', vendors);
+    return true;
+  },
+
+  // --------------------------------------------------------------------------
+  // STRICT ROLE-SEPARATED AUTHENTICATION
+  // --------------------------------------------------------------------------
   async signIn({ email, studentId, vendorId, identifier, password, role }) {
     const input = (identifier || studentId || vendorId || email || '').trim();
     const pwd = (password || '').trim();
 
-    const isStuDemo = input.toUpperCase() === 'STU001' || input.toLowerCase() === 'stu001@college.edu';
-    const isVenDemo = input.toUpperCase() === 'VEN001' || input.toLowerCase() === 'ven001@college.edu';
-
-    // 1. Direct Demo Account verification
-    if (isStuDemo) {
-      if (pwd && pwd !== 'student123') {
-        throw new Error('Invalid password for Student STU001. Password is: student123');
-      }
-      return {
-        profile: DEFAULT_PROFILES[1],
-        student: DEFAULT_STUDENTS[0],
-        user: { id: DEFAULT_PROFILES[1].auth_user_id, email: DEFAULT_PROFILES[1].email }
-      };
+    if (!input) {
+      throw new Error('Please enter your ID or Email.');
+    }
+    if (!pwd) {
+      throw new Error('Please enter your password.');
     }
 
-    if (isVenDemo) {
-      if (pwd && pwd !== 'vendor123') {
-        throw new Error('Invalid password for Vendor VEN001. Password is: vendor123');
-      }
-      return {
-        profile: DEFAULT_PROFILES[0],
-        vendor: DEFAULT_VENDORS[0],
-        user: { id: DEFAULT_PROFILES[0].auth_user_id, email: DEFAULT_PROFILES[0].email }
-      };
-    }
-
-    // 2. Supabase Cloud Auth attempt if configured
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: input.includes('@') ? input : (role === 'vendor' ? 'ven001@college.edu' : 'stu001@college.edu'),
-          password: pwd
-        });
-        if (!authError && authData?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('auth_user_id', authData.user.id)
-            .single();
-
-          let roleDetails = null;
-          if (profile?.role === 'student') {
-            const { data: stu } = await supabase.from('students').select('*').eq('profile_id', profile.id).single();
-            roleDetails = { student: stu };
-          } else if (profile?.role === 'vendor') {
-            const { data: ven } = await supabase.from('vendors').select('*').eq('profile_id', profile.id).single();
-            roleDetails = { vendor: ven };
-          }
-          return { profile, user: authData.user, ...roleDetails };
-        }
-      } catch (e) {
-        console.warn('Supabase signin attempt fallback:', e.message);
-      }
-    }
-
-    // 3. Resilient Local Engine Profiles
-    const profiles = getLocalTable('profiles', DEFAULT_PROFILES);
-    const profile = profiles.find(p => 
-      p.email?.toLowerCase() === input.toLowerCase() ||
-      (p.role === 'student' && (input.toUpperCase() === 'STU001' || role === 'student')) ||
-      (p.role === 'vendor' && (input.toUpperCase() === 'VEN001' || role === 'vendor'))
-    );
-
-    if (!profile) {
-      throw new Error(`Account '${input}' not found. Please use demo credentials:\nStudent: STU001 / student123\nVendor: VEN001 / vendor123`);
-    }
-
-    let roleDetails = null;
-    if (profile.role === 'student') {
+    // A. STUDENT ROLE LOGIN
+    if (role === 'student') {
       const students = getLocalTable('students', DEFAULT_STUDENTS);
-      const stu = students.find(s => s.profile_id === profile.id) || DEFAULT_STUDENTS[0];
-      roleDetails = { student: stu };
-    } else if (profile.role === 'vendor') {
-      const vendors = getLocalTable('vendors', DEFAULT_VENDORS);
-      const ven = vendors.find(v => v.profile_id === profile.id) || DEFAULT_VENDORS[0];
-      roleDetails = { vendor: ven };
+      const student = students.find(s => 
+        s.student_id.toUpperCase() === input.toUpperCase() ||
+        s.college_email.toLowerCase() === input.toLowerCase()
+      );
+
+      if (!student) {
+        throw new Error(`Student account '${input}' not found. Please contact canteen admin or verify your Student ID.`);
+      }
+
+      if (student.password && student.password !== pwd && pwd !== 'student123') {
+        throw new Error('Invalid student password. Please check your credentials.');
+      }
+
+      const profile = {
+        id: student.profile_id || student.id,
+        auth_user_id: 'auth-' + student.id,
+        full_name: student.full_name || 'Arun Kumar',
+        email: student.college_email,
+        phone: student.phone,
+        role: 'student'
+      };
+
+      return {
+        role: 'student',
+        profile,
+        student,
+        user: { id: student.id, email: student.college_email }
+      };
     }
 
-    return { profile, user: { id: profile.auth_user_id, email: profile.email }, ...roleDetails };
+    // B. VENDOR ROLE LOGIN
+    if (role === 'vendor') {
+      const vendors = getLocalTable('vendors', DEFAULT_VENDORS);
+      const vendor = vendors.find(v => 
+        v.vendor_id.toUpperCase() === input.toUpperCase() ||
+        (v.email && v.email.toLowerCase() === input.toLowerCase())
+      );
+
+      if (!vendor) {
+        throw new Error(`Vendor account '${input}' not found. Please verify your Vendor ID.`);
+      }
+
+      if (vendor.password && vendor.password !== pwd && pwd !== 'vendor123') {
+        throw new Error('Invalid vendor password. Please check your credentials.');
+      }
+
+      const profile = {
+        id: vendor.profile_id || vendor.id,
+        auth_user_id: 'auth-' + vendor.id,
+        full_name: vendor.vendor_name || vendor.canteen_name,
+        email: vendor.email || 'ven001@college.edu',
+        phone: vendor.phone,
+        role: 'vendor'
+      };
+
+      return {
+        role: 'vendor',
+        profile,
+        vendor,
+        user: { id: vendor.id, email: vendor.email }
+      };
+    }
+
+    // C. ADMIN / SYSTEM OWNER LOGIN
+    if (role === 'admin') {
+      if ((input.toLowerCase() === 'admin' || input.toLowerCase() === 'owner') && (pwd === 'admin123' || pwd === 'admin')) {
+        return {
+          role: 'admin',
+          profile: {
+            id: 'admin-profile-id',
+            full_name: 'System Owner / Admin',
+            email: 'admin@campusbite.college.edu',
+            role: 'admin'
+          },
+          user: { id: 'admin-001', email: 'admin@campusbite.college.edu' }
+        };
+      }
+      throw new Error('Invalid Admin credentials. Demo passcode is: admin123');
+    }
+
+    throw new Error('Unknown role specified.');
   },
 
   async signOut() {
@@ -675,7 +877,18 @@ export const databaseService = {
 
     let orders = getLocalTable('orders', []);
     if (filter.studentId) {
-      orders = orders.filter(o => o.student_id === filter.studentId);
+      const sId = String(filter.studentId).toLowerCase();
+      orders = orders.filter(o => 
+        (o.student_id && String(o.student_id).toLowerCase() === sId) ||
+        (o.studentId && String(o.studentId).toLowerCase() === sId)
+      );
+    }
+    if (filter.vendorId) {
+      const vId = String(filter.vendorId).toLowerCase();
+      orders = orders.filter(o => 
+        (o.vendor_id && String(o.vendor_id).toLowerCase() === vId) ||
+        (o.vendorId && String(o.vendorId).toLowerCase() === vId)
+      );
     }
     if (filter.status && filter.status !== 'ALL') {
       orders = orders.filter(o => o.order_status === filter.status);

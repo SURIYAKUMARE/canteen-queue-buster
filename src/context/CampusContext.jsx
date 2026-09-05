@@ -22,8 +22,9 @@ export function CampusProvider({ children }) {
   const [vendorTab, setVendorTab] = useState('dashboard');
   const [vendorOrderFilter, setVendorOrderFilter] = useState('ALL');
 
-  // Auth & Profile state - null initially so "Who are you?" is displayed
+  // Auth & Profile state - null initially so "Continue as" start screen is displayed
   const [currentUser, setCurrentUser] = useState(null);
+  const [authFlow, setAuthFlow] = useState('start'); // 'start' | 'student_login' | 'vendor_login' | 'admin_portal'
 
   const [studentUser, setStudentUser] = useState({
     id: '22222222-2222-2222-2222-222222222222',
@@ -444,6 +445,7 @@ export function CampusProvider({ children }) {
       console.warn('Signout warning:', e);
     }
     setCurrentUser(null);
+    setAuthFlow('start');
     setActiveRole('student');
     setStudentTab('menu');
     setVendorTab('dashboard');
@@ -465,6 +467,8 @@ export function CampusProvider({ children }) {
     // Auth & Profiles
     currentUser,
     setCurrentUser,
+    authFlow,
+    setAuthFlow,
     studentUser,
     setStudentUser,
     vendorUser,

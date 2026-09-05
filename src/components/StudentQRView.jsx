@@ -226,7 +226,7 @@ export default function StudentQRView() {
           </div>
         </div>
 
-        {/* Navigation & Simulation Shortcuts */}
+        {/* Navigation Shortcuts */}
         <div className="grid grid-cols-2 gap-2 pt-1">
           <button
             onClick={() => setStudentTab('orders')}
@@ -237,15 +237,11 @@ export default function StudentQRView() {
           </button>
 
           <button
-            onClick={() => {
-              setActiveRole('vendor');
-              setVendorTab('scan');
-            }}
-            className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 text-xs font-black py-2.5 rounded-xl transition shadow-md"
-            title="Switch to Vendor and test camera scan"
+            onClick={() => setStudentTab('menu')}
+            className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 text-xs font-black py-2.5 rounded-xl transition shadow-md cursor-pointer"
           >
-            <ScanLine className="w-3.5 h-3.5" />
-            <span>Scan as Vendor →</span>
+            <ShoppingBag className="w-3.5 h-3.5" />
+            <span>Order More Food →</span>
           </button>
         </div>
       </div>

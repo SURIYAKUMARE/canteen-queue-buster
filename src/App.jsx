@@ -1,6 +1,10 @@
 import React, { Component } from 'react';
 import { CampusProvider, useCampus } from './context/CampusContext';
 import TopBar from './components/TopBar';
+import StartScreen from './components/StartScreen';
+import StudentLogin from './components/StudentLogin';
+import VendorLogin from './components/VendorLogin';
+import AdminPortal from './components/AdminPortal';
 import StudentHome from './components/StudentHome';
 import StudentMenu from './components/StudentMenu';
 import StudentOrders from './components/StudentOrders';
@@ -22,8 +26,6 @@ import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import OrderSuccessModal from './components/OrderSuccessModal';
 import LiveOrderVendorModal from './components/LiveOrderVendorModal';
 import NotificationToaster from './components/NotificationToaster';
-import SplitScreenDemo from './components/SplitScreenDemo';
-import RoleSelectLogin from './components/RoleSelectLogin';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -67,17 +69,37 @@ class ErrorBoundary extends Component {
 }
 
 function MainView() {
-  const { activeRole, studentTab, vendorTab, currentUser, openAuthModal } = useCampus();
+  const { 
+    activeRole, 
+    studentTab, 
+    vendorTab, 
+    currentUser, 
+    authFlow, 
+    setAuthFlow, 
+    handleLogout 
+  } = useCampus();
 
+  // If no user is logged in, show isolated start or login screens
   if (!currentUser) {
-    return <RoleSelectLogin />;
+    if (authFlow === 'student_login') {
+      return <StudentLogin onBack={() => setAuthFlow('start')} />;
+    }
+    if (authFlow === 'vendor_login') {
+      return <VendorLogin onBack={() => setAuthFlow('start')} />;
+    }
+    if (authFlow === 'admin_portal') {
+      return <AdminPortal onBack={() => setAuthFlow('start')} />;
+    }
+    return <StartScreen onSelectRole={(role) => setAuthFlow(role)} />;
   }
 
-  if (activeRole === 'split') {
-    return <SplitScreenDemo />;
+  // System Owner / Admin Portal
+  if (currentUser?.profile?.role === 'admin') {
+    return <AdminPortal onBack={handleLogout} />;
   }
 
-  if (activeRole === 'vendor') {
+  // Vendor Application (Strictly Isolated)
+  if (activeRole === 'vendor' || currentUser?.profile?.role === 'vendor') {
     return (
       <div className="flex-1 w-full max-w-lg mx-auto py-4">
         {vendorTab === 'dashboard' && <VendorDashboard />}
@@ -90,7 +112,7 @@ function MainView() {
     );
   }
 
-  // Student Role (Default)
+  // Student Application (Strictly Isolated)
   return (
     <div className="flex-1 w-full max-w-lg mx-auto py-4">
       {studentTab === 'home' && <StudentHome />}

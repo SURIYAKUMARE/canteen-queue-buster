@@ -22,27 +22,37 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 -- ----------------------------------------------------------------------------
 -- 2. TABLE: students
--- Student specific information
+-- Student specific information with full academic details
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.students (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    student_id TEXT UNIQUE NOT NULL, -- e.g. 23AIML001, 21BCS042
+    student_id TEXT UNIQUE NOT NULL, -- e.g. STU001
+    college_name TEXT DEFAULT 'Campus College of Engineering',
+    department TEXT DEFAULT 'Computer Science',
+    year TEXT DEFAULT '3rd Year',
+    section TEXT DEFAULT 'A',
     college_email TEXT NOT NULL,
     phone TEXT,
+    password_hash TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ----------------------------------------------------------------------------
 -- 3. TABLE: vendors
--- Canteen vendor operations information
+-- Canteen vendor operations information and configurable GPay/UPI QR
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.vendors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    vendor_id TEXT UNIQUE NOT NULL, -- e.g. VND-01
+    vendor_id TEXT UNIQUE NOT NULL, -- e.g. VEN001
     vendor_name TEXT NOT NULL,
+    canteen_name TEXT NOT NULL,
     phone TEXT,
+    canteen_details TEXT,
+    upi_id TEXT DEFAULT 'canteen@okhdfcbank',
+    upi_qr_url TEXT, -- Configurable GPay/UPI QR Image uploaded by owner/vendor
+    password_hash TEXT,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT now()
 );
