@@ -9,19 +9,25 @@ import {
   Plus, 
   Minus, 
   ShoppingBag, 
-  ChevronRight,
-  UtensilsCrossed,
-  Layers,
-  ArrowRight,
-  TrendingUp
+  ChevronRight, 
+  UtensilsCrossed, 
+  Layers, 
+  ArrowRight, 
+  TrendingUp,
+  Users,
+  RotateCcw,
+  Zap
 } from 'lucide-react';
+import { useToast } from './ui/ToastContext';
 
 export default function StudentHome() {
   const { 
     studentUser, 
+    currentUser,
     isCanteenOpen, 
     menu, 
     cart, 
+    orders,
     addToCart, 
     updateCartQty, 
     setSelectedFoodDetail, 
@@ -30,9 +36,11 @@ export default function StudentHome() {
     cartTotal,
     setIsCartOpen
   } = useCampus();
+  const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+
 
   const categories = [
     { id: 'All', label: 'All Items', icon: '🍽️' },
@@ -56,6 +64,64 @@ export default function StudentHome() {
   const featuredItems = (menu || []).filter(item => item?.tags && item.tags.some(t => t.includes('Special') || t.includes('Best Seller') || t.includes('Combo')));
 
   const studentFirstName = (studentUser?.name || 'Student').split(' ')[0];
+  const studentId = currentUser?.id || studentUser?.id || studentUser?.student_id;
+
+  // Active kitchen queue rush calculation
+  const activeOrdersCount = (orders || []).filter(o => 
+    o.status === 'ordered' || o.status === 'preparing' || o.status === 'pending'
+  ).length;
+
+  let rushConfig = {
+    label: 'Low Rush',
+    wait: '~3-5 mins',
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/10 border-emerald-500/30',
+    level: 'Quick Pickup'
+  };
+  if (activeOrdersCount > 6) {
+    rushConfig = {
+      label: 'High Rush',
+      wait: '~12-18 mins',
+      color: 'text-rose-400',
+      bg: 'bg-rose-500/10 border-rose-500/30',
+      level: 'Peak Demand'
+    };
+  } else if (activeOrdersCount >= 3) {
+    rushConfig = {
+      label: 'Moderate Rush',
+      wait: '~6-10 mins',
+      color: 'text-amber-400',
+      bg: 'bg-amber-500/10 border-amber-500/30',
+      level: 'Steady Traffic'
+    };
+  }
+
+  // Student's recent past orders for 1-tap reordering
+  const myPastOrders = (orders || [])
+    .filter(o => (o.student_id === studentId || o.studentId === studentId) && (o.status === 'completed' || o.status === 'delivered' || o.status === 'ready'))
+    .slice(0, 5);
+
+  const handleReorderPast = (order) => {
+    const orderItems = order.order_items || order.items || [];
+    if (!orderItems.length) {
+      toast?.warning?.('No items found in this order.') || alert('No items found');
+      return;
+    }
+    let addedCount = 0;
+    orderItems.forEach(oi => {
+      const mItem = (menu || []).find(m => m.id === (oi.item_id || oi.id || oi.menu_id));
+      if (mItem) {
+        addToCart(mItem);
+        addedCount++;
+      }
+    });
+    if (addedCount > 0) {
+      toast?.success?.(`Added ${addedCount} items from previous order to cart!`);
+      setIsCartOpen(true);
+    } else {
+      toast?.error?.('Could not match items to current menu.');
+    }
+  };
 
   return (
     <div className="max-w-md mx-auto space-y-5 pb-24 px-4 text-white animate-fade-in">
@@ -94,6 +160,31 @@ export default function StudentHome() {
             className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 transition shadow-inner"
           />
         </div>
+
+        {/* Live Counter Rush Meter */}
+        <div className={`p-3 rounded-2xl border ${rushConfig.bg} flex items-center justify-between gap-3 shadow-inner`}>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-slate-900/80 border border-slate-800 shrink-0">
+              <TrendingUp className={`w-4 h-4 ${rushConfig.color}`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-xs font-bold ${rushConfig.color}`}>{rushConfig.label}</span>
+                <span className="text-[10px] text-slate-400 font-mono">({rushConfig.level})</span>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                {activeOrdersCount === 0 
+                  ? 'Zero kitchen backlog. Immediate prep!' 
+                  : `${activeOrdersCount} order${activeOrdersCount > 1 ? 's' : ''} in queue • Pickup wait ${rushConfig.wait}`}
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-950/60 border border-slate-800 text-slate-300">
+              ⚡ Live Rush
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Featured / Popular Carousel Banner */}
@@ -122,6 +213,61 @@ export default function StudentHome() {
           </div>
         </div>
       </div>
+
+      {/* ⚡ Quick Reorder Tray (if student has past orders) */}
+      {myPastOrders.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Quick Reorder</h3>
+            </div>
+            <button
+              onClick={() => setStudentTab('orders')}
+              className="text-[11px] font-bold text-slate-400 hover:text-slate-200"
+            >
+              Order History
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1">
+            {myPastOrders.map((pOrder) => {
+              const itemsList = pOrder.order_items || pOrder.items || [];
+              const firstItem = itemsList[0];
+              const summaryText = firstItem 
+                ? `${firstItem.item_name || firstItem.name || 'Dish'}${itemsList.length > 1 ? ` +${itemsList.length - 1} more` : ''}`
+                : 'Previous Order';
+              const orderTotal = pOrder.total_amount || pOrder.total || 0;
+
+              return (
+                <div 
+                  key={pOrder.id}
+                  className="bg-slate-900 border border-slate-800/80 rounded-2xl p-2.5 min-w-[180px] shrink-0 space-y-1.5 hover:border-slate-700 transition"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                      #{pOrder.pickup_token || pOrder.id.slice(0, 4)}
+                    </span>
+                    <span className="text-xs font-mono font-bold text-white">
+                      ₹{orderTotal}
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-slate-200 truncate">
+                    {summaryText}
+                  </p>
+                  <button
+                    onClick={() => handleReorderPast(pOrder)}
+                    className="w-full bg-slate-800 hover:bg-orange-500 hover:text-white text-slate-300 text-[11px] font-bold py-1 px-2 rounded-xl transition flex items-center justify-center gap-1"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>1-Tap Reorder</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Food Categories Pills */}
       <div className="space-y-2">
