@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCampus } from '../context/CampusContext';
 import { 
   GraduationCap, 
@@ -7,9 +7,13 @@ import {
   Database,
   User,
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  Wifi,
+  WifiOff,
+  RefreshCw
 } from 'lucide-react';
 import { isSupabaseConfigured } from '../lib/supabaseClient';
+import { syncEngine } from '../services/syncEngine.js';
 
 export default function TopBar() {
   const { 
@@ -22,6 +26,27 @@ export default function TopBar() {
     handleLogout,
     setSupabaseConfigModalOpen
   } = useCampus();
+
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [syncState, setSyncState] = useState({ queueLength: syncEngine.getQueueLength(), isSyncing: false });
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const unsub = syncEngine.subscribe((state) => {
+      setSyncState(state);
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      unsub();
+    };
+  }, []);
+
 
   // If not logged in, StartScreen/Login pages handle their own full-page UI
   if (!currentUser) return null;
@@ -69,8 +94,39 @@ export default function TopBar() {
             </button>
           )}
 
+          {/* Network / Offline Synchronization Status Pill */}
+          {!isOnline ? (
+            <div 
+              className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-[11px] font-bold"
+              title="You are currently offline. Orders will be securely queued and synced when online."
+            >
+              <WifiOff className="w-3 h-3 text-rose-400" />
+              <span className="hidden sm:inline">Offline</span>
+              {syncState.queueLength > 0 && (
+                <span className="bg-rose-500/30 px-1 rounded font-mono text-[10px]">
+                  {syncState.queueLength}
+                </span>
+              )}
+            </div>
+          ) : syncState.isSyncing ? (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-amber-950/70 border border-amber-500/40 text-amber-300 text-[11px] font-bold">
+              <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
+              <span className="hidden sm:inline">Syncing...</span>
+            </div>
+          ) : syncState.queueLength > 0 ? (
+            <button
+              onClick={() => syncEngine.flushQueue()}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-sky-950/70 border border-sky-500/40 text-sky-300 text-[11px] font-bold hover:bg-sky-900/60 transition cursor-pointer"
+              title="Pending mutations queued for sync. Click to flush now."
+            >
+              <RefreshCw className="w-3 h-3 text-sky-400" />
+              <span>Sync ({syncState.queueLength})</span>
+            </button>
+          ) : null}
+
           {/* User Profile Badge */}
           <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 text-slate-200 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0">
+
             {isVendor ? (
               <ChefHat className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
             ) : isAdmin ? (
